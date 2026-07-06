@@ -482,7 +482,8 @@ function ConfigEditorFields({
           onChange={(event) =>
             onDraftChange({ ...draft, content: event.target.value })
           }
-          className="min-h-[520px] font-mono text-sm"
+          spellCheck={false}
+          className="min-h-[520px] font-mono text-sm leading-6"
         />
       </Field>
     </FieldGroup>

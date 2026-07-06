@@ -46,7 +46,10 @@ export function PromptEditorDialog(props: Props) {
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-hidden sm:max-w-3xl">
+      <DialogContent
+        initialFocus={false}
+        className="max-h-[calc(100svh-2rem)] overflow-hidden sm:max-w-3xl"
+      >
         {props.mode === "view" && props.prompt ? (
           <PromptViewContent {...props} prompt={props.prompt} />
         ) : (
@@ -86,7 +89,7 @@ function PromptViewContent({
         {prompt.description ? (
           <p className="text-sm text-muted-foreground">{prompt.description}</p>
         ) : null}
-        <pre className="max-h-[52svh] overflow-auto rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-wrap">
+        <pre className="max-h-[52svh] cursor-default overflow-auto rounded-lg border bg-muted/30 p-3 font-mono text-sm whitespace-pre-wrap">
           {prompt.content}
         </pre>
       </div>
@@ -125,7 +128,10 @@ function PromptFormContent({
           {mode === "create" ? "新增提示詞" : "編輯提示詞"}
         </DialogTitle>
       </DialogHeader>
-      <div className="max-h-[62svh] overflow-auto pr-1">
+      <div
+        data-slot="prompt-form-scroll"
+        className="max-h-[62svh] overflow-x-hidden overflow-y-auto pr-2"
+      >
         <FieldGroup>
           <PromptTextFields draft={draft} onDraftChange={onDraftChange} />
           <PromptTagPicker
@@ -164,7 +170,6 @@ function PromptTextFields({
           onChange={(event) =>
             onDraftChange({ ...draft, title: event.target.value })
           }
-          autoFocus
         />
       </Field>
       <Field>
@@ -249,7 +254,8 @@ function PromptContentField({
         onChange={(event) =>
           onDraftChange({ ...draft, content: event.target.value })
         }
-        className="min-h-72"
+        spellCheck={false}
+        className="min-h-[38svh] font-mono text-sm"
       />
     </Field>
   )
