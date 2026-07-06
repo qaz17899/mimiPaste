@@ -42,6 +42,8 @@ type Props = {
 }
 
 export function PromptEditorDialog(props: Props) {
+  if (props.mode === "empty") return null
+
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent className="max-h-[calc(100svh-2rem)] overflow-hidden sm:max-w-3xl">
