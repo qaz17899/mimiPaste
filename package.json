@@ -1,0 +1,16 @@
+{
+  "name": "mimipaste",
+  "private": true,
+  "version": "0.0.1",
+  "packageManager": "pnpm@11.10.0",
+  "scripts": {
+    "dev:web": "corepack pnpm --dir web dev",
+    "build:web": "corepack pnpm --dir web build",
+    "lint:web": "corepack pnpm --dir web lint",
+    "test:web": "corepack pnpm --dir web test",
+    "typecheck:web": "corepack pnpm --dir web typecheck",
+    "dev:server": "go -C server run ./cmd/mimipaste",
+    "test:server": "go -C server test ./... -timeout=60s",
+    "check": "corepack pnpm lint:web && corepack pnpm typecheck:web && corepack pnpm test:web && corepack pnpm build:web && go -C server test ./... -timeout=60s"
+  }
+}

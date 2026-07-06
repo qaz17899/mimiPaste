@@ -1,0 +1,210 @@
+openapi: 3.1.0
+info:
+  title: mimiPaste Local API
+  version: 0.0.1
+servers:
+  - url: http://127.0.0.1:18700
+paths:
+  /api/health:
+    get:
+      operationId: getHealth
+      responses:
+        "200": { description: Local service is running. }
+  /api/prompts:
+    get:
+      operationId: listPrompts
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: favorite, in: query, schema: { type: boolean } }
+        - { name: sort, in: query, schema: { type: string, enum: [updated, copied, copy_count, title] } }
+      responses:
+        "200": { description: Prompt list. }
+    post:
+      operationId: createPrompt
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PromptSaveInput" }
+      responses:
+        "201": { description: Prompt created. }
+  /api/prompts/{id}:
+    get:
+      operationId: getPrompt
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "200": { description: Prompt detail. }
+    put:
+      operationId: updatePrompt
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PromptSaveInput" }
+      responses:
+        "200": { description: Prompt updated. }
+    delete:
+      operationId: deletePrompt
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "204": { description: Prompt deleted. }
+  /api/prompts/{id}/copy:
+    post:
+      operationId: recordPromptCopy
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "200": { description: Copy usage recorded after clipboard success. }
+  /api/tags:
+    get:
+      operationId: listTags
+      responses:
+        "200": { description: Tag list. }
+    post:
+      operationId: createTag
+      responses:
+        "201": { description: Tag created. }
+  /api/export/prompts:
+    get:
+      operationId: exportPrompts
+      responses:
+        "200": { description: Prompt JSON export. }
+  /api/import/prompts:
+    post:
+      operationId: importPrompts
+      responses:
+        "200": { description: Prompt import completed transactionally. }
+  /api/agents:
+    get:
+      operationId: listAgents
+      responses:
+        "200": { description: Agent list. }
+    post:
+      operationId: createAgent
+      responses:
+        "201": { description: Custom agent created. }
+  /api/config-sources:
+    get:
+      operationId: listConfigSources
+      responses:
+        "200": { description: Config source list. }
+    post:
+      operationId: createConfigSource
+      responses:
+        "201": { description: Config source registered. }
+  /api/config-sources/{id}/read:
+    get:
+      operationId: readConfigSource
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "200": { description: Registered config file content and safe fields. }
+  /api/config-sources/{id}/validate:
+    post:
+      operationId: validateConfigSource
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "200": { description: Validation result. }
+  /api/config-sources/{id}/content:
+    put:
+      operationId: saveConfigSourceContent
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "200": { description: Raw config content saved after validation. }
+  /api/config-sources/{id}/preview:
+    post:
+      operationId: previewConfigApply
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "200": { description: Diff preview. }
+  /api/config-sources/{id}/apply:
+    post:
+      operationId: applyProfile
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "200": { description: Profile applied with backup. }
+  /api/profiles:
+    get:
+      operationId: listProfiles
+      responses:
+        "200": { description: Profile list. }
+    post:
+      operationId: createProfile
+      responses:
+        "201": { description: Profile created. }
+  /api/profiles/{id}:
+    get:
+      operationId: getProfile
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "200": { description: Profile detail. }
+    put:
+      operationId: updateProfile
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "200": { description: Profile updated. }
+    delete:
+      operationId: deleteProfile
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "204": { description: Profile deleted. }
+  /api/backups:
+    get:
+      operationId: listBackups
+      responses:
+        "200": { description: Backup list. }
+  /api/backups/{id}:
+    get:
+      operationId: getBackup
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "200": { description: Backup detail. }
+  /api/backups/{id}/preview-restore:
+    post:
+      operationId: previewRestore
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "200": { description: Restore diff preview. }
+  /api/backups/{id}/restore:
+    post:
+      operationId: restoreBackup
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "200": { description: Backup restored after confirmation. }
+  /api/settings:
+    get:
+      operationId: getSettings
+      responses:
+        "200": { description: Local app settings. }
+    put:
+      operationId: updateSettings
+      responses:
+        "200": { description: Settings updated. }
+components:
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    PromptSaveInput:
+      type: object
+      required: [title, content]
+      properties:
+        title: { type: string }
+        content: { type: string }
+        description: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        favorite: { type: boolean }
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object }

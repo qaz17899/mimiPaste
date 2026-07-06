@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Frontend builds
+dist/
+build/
+web/dist/
+
+# Go builds and coverage
+*.exe
+*.test
+coverage.out
+
+# Local data
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+data/local/
+/backups/
+
+# Secrets and local settings
+.env
+.env.*
+*.key
+*.pem
+config.local.toml
+settings.local.json
+
+# Tooling
+.tools/
+.pnpm-store/
+.vite/
+.turbo/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
