@@ -1,4 +1,9 @@
-import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty"
 
 export function PlaceholderPanel({
   title,
@@ -12,8 +17,8 @@ export function PlaceholderPanel({
       <Empty>
         <EmptyHeader>
           <EmptyTitle>{title}</EmptyTitle>
+          <EmptyDescription>{action}</EmptyDescription>
         </EmptyHeader>
-        <EmptyContent>{action}</EmptyContent>
       </Empty>
     </div>
   )

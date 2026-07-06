@@ -1,8 +1,7 @@
 import type { ComponentType } from "react"
 import { ArchiveRestore, FileSliders, Settings2, Sparkles } from "lucide-react"
 
-export type AppRouteKey =
-  "prompts" | "agents" | "profiles" | "backups" | "settings"
+export type AppRouteKey = "prompts" | "configs" | "backups" | "settings"
 
 export type NavSectionKey = "workspace" | "config" | "system"
 
@@ -39,7 +38,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     maxWidth: "max-w-[1600px]",
   },
   {
-    key: "agents",
+    key: "configs",
     to: "/configs",
     label: "配置",
     icon: FileSliders,
@@ -73,8 +72,6 @@ export function getRouteMeta(routeKey: AppRouteKey): NavItem {
 
 export function routeKeyFromPathname(pathname: string): AppRouteKey {
   const normalized = pathname === "/" ? "/prompts" : pathname
-  if (normalized === "/agents") return "agents"
-  if (normalized === "/profiles") return "agents"
-  if (normalized === "/configs") return "agents"
+  if (normalized === "/configs") return "configs"
   return NAV_ITEMS.find((item) => item.to === normalized)?.key ?? "prompts"
 }

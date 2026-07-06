@@ -20,7 +20,10 @@ export function useAgents() {
 }
 
 export function useConfigSources() {
-  return useQuery({ queryKey: queryKeys.agents.configSources(), queryFn: fetchConfigSources })
+  return useQuery({
+    queryKey: queryKeys.agents.configSources(),
+    queryFn: fetchConfigSources,
+  })
 }
 
 export function useConfigSourceRead(id: string | null) {
@@ -33,27 +36,34 @@ export function useConfigSourceRead(id: string | null) {
 
 export function useAgentMutations() {
   const queryClient = useQueryClient()
-  const invalidateAgents = () => queryClient.invalidateQueries({ queryKey: queryKeys.agents.root() })
+  const invalidateAgents = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.agents.root() })
   return {
-    createAgent: useMutation({ mutationFn: createAgent, onSuccess: invalidateAgents }),
+    createAgent: useMutation({
+      mutationFn: createAgent,
+      onSuccess: invalidateAgents,
+    }),
     createSource: useMutation({
       mutationFn: (input: CreateConfigSourceInput) => createConfigSource(input),
       onSuccess: invalidateAgents,
     }),
     validateSource: useMutation({
-      mutationFn: ({ id, content }: { id: string; content: string }) => validateConfigSource(id, content),
+      mutationFn: ({ id, content }: { id: string; content: string }) =>
+        validateConfigSource(id, content),
     }),
     saveSource: useMutation({
-      mutationFn: ({ id, content }: { id: string; content: string }) => saveConfigSourceContent(id, content),
+      mutationFn: ({ id, content }: { id: string; content: string }) =>
+        saveConfigSourceContent(id, content),
       onSuccess: invalidateAgents,
     }),
     preview: useMutation({
-      mutationFn: ({ id, profileID }: { id: string; profileID: string }) => previewConfigSource(id, profileID),
+      mutationFn: ({ id, profileID }: { id: string; profileID: string }) =>
+        previewConfigSource(id, profileID),
     }),
     apply: useMutation({
-      mutationFn: ({ id, profileID }: { id: string; profileID: string }) => applyConfigSource(id, profileID),
+      mutationFn: ({ id, profileID }: { id: string; profileID: string }) =>
+        applyConfigSource(id, profileID),
       onSuccess: invalidateAgents,
     }),
   }
 }
-

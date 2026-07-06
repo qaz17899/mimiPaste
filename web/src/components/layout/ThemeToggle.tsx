@@ -13,9 +13,7 @@ const THEME_SEQUENCE = ["system", "light", "dark"] as const
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
   const nextTheme =
-    THEME_SEQUENCE[
-      (THEME_SEQUENCE.indexOf(theme) + 1) % THEME_SEQUENCE.length
-    ]
+    THEME_SEQUENCE[(THEME_SEQUENCE.indexOf(theme) + 1) % THEME_SEQUENCE.length]
   const Icon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor
 
   return (
@@ -30,7 +28,7 @@ export function ThemeToggle() {
           />
         }
       >
-        <Icon />
+        <Icon data-icon="inline-start" />
         <span className="sr-only">切換外觀</span>
       </TooltipTrigger>
       <TooltipContent>切換外觀</TooltipContent>

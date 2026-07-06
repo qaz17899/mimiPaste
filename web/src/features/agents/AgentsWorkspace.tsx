@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Empty,
-  EmptyContent,
+  EmptyDescription,
   EmptyHeader,
+  EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -19,6 +20,7 @@ import {
   SelectGroup,
   SelectItem,
   SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -29,6 +31,18 @@ import {
 } from "@/features/agents/agent-queries"
 import type { ConfigSource } from "@/features/agents/agent-types"
 import {
+  draftFor,
+  newDraft,
+  newProfileID,
+  profileLabel,
+  profileSelectItems,
+  profilesForSource,
+  selectedIDFor,
+  selectedSource,
+  sourceLabel,
+  type DraftState,
+} from "@/features/agents/config-workspace-state"
+import {
   useProfileMutations,
   useProfiles,
 } from "@/features/profiles/profile-queries"
@@ -37,15 +51,8 @@ import type {
   ProfileSaveInput,
 } from "@/features/profiles/profile-types"
 
-const newProfileID = "__new_profile__"
-const originalProfileName = "原本配置"
-const emptyProfiles: Profile[] = []
 const emptySources: ConfigSource[] = []
-
-type DraftState = {
-  key: string
-  value: ProfileSaveInput
-}
+const emptyProfiles: Profile[] = []
 
 type ConfigWorkspaceModel = {
   dirty: boolean
@@ -79,6 +86,37 @@ type WorkspaceActionDeps = {
   source: ConfigSource | null
 }
 
+type ChangeSourceOptions = {
+  id: string
+  setDraftState: (draft: DraftState | null) => void
+  setProfileID: (id: string | null) => void
+  setSourceID: (id: string | null) => void
+}
+
+type ApplySelectedOptions = {
+  apply: (input: { id: string; profileID: string }) => Promise<unknown>
+  dirty: boolean
+  selected: Profile | null
+  source: ConfigSource | null
+}
+
+type SaveSelectedOptions = {
+  create: (input: ProfileSaveInput) => Promise<Profile>
+  draft: ProfileSaveInput | null
+  selected: Profile | null
+  setDraftState: (draft: DraftState | null) => void
+  setProfileID: (id: string) => void
+  update: (input: { id: string; input: ProfileSaveInput }) => Promise<Profile>
+}
+
+type ConfigSelectionOptions = {
+  draftState: DraftState | null
+  profileID: string | null
+  profiles: Profile[]
+  sourceID: string | null
+  sources: ConfigSource[]
+}
+
 export function AgentsWorkspace() {
   const model = useConfigWorkspace()
   if (model.sources.length === 0) return <NoConfigFiles />
@@ -99,19 +137,20 @@ function useConfigWorkspace(): ConfigWorkspaceModel {
   const [sourceID, setSourceID] = useState<string | null>(null)
   const [profileID, setProfileID] = useState<string | null>(null)
   const [draftState, setDraftState] = useState<DraftState | null>(null)
-  const source = selectedSource(sources, sourceID)
-  const sourceProfiles = profilesForSource(profiles, source)
-  const selectedID = selectedIDFor(
-    source,
-    sourceProfiles,
+  const selection = configSelection({
+    draftState,
     profileID,
-    draftState
-  )
-  const selected =
-    sourceProfiles.find((profile) => profile.id === selectedID) ?? null
-  const readQuery = useConfigSourceRead(source?.id ?? null)
-  const content = readQuery.data?.content ?? ""
-  const draft = draftFor(source, selected, draftState, content)
+    profiles,
+    sourceID,
+    sources,
+  })
+  const readQuery = useConfigSourceRead(selection.source?.id ?? null)
+  const draft = draftFor({
+    draft: draftState,
+    fallbackContent: readQuery.data?.content ?? "",
+    profile: selection.selected,
+    source: selection.source,
+  })
   const dirty = draftState !== null
   const pending = mutationsPending(profileMutations, agentMutations)
   const actions = workspaceActions({
@@ -119,25 +158,49 @@ function useConfigWorkspace(): ConfigWorkspaceModel {
     dirty,
     draft,
     profileMutations,
-    profiles: sourceProfiles,
+    profiles: selection.profiles,
     readQuery,
-    selected,
-    selectedID,
+    selected: selection.selected,
+    selectedID: selection.selectedID,
     setDraftState,
     setProfileID,
     setSourceID,
-    source,
+    source: selection.source,
   })
   return {
     dirty,
     draft,
     pending,
-    profileID: selectedID,
-    profiles: sourceProfiles,
-    selected,
-    source,
+    profileID: selection.selectedID,
+    profiles: selection.profiles,
+    selected: selection.selected,
+    source: selection.source,
     sources,
     ...actions,
+  }
+}
+
+function configSelection({
+  draftState,
+  profileID,
+  profiles,
+  sourceID,
+  sources,
+}: ConfigSelectionOptions) {
+  const source = selectedSource(sources, sourceID)
+  const sourceProfiles = profilesForSource(profiles, source)
+  const selectedID = selectedIDFor({
+    draft: draftState,
+    id: profileID,
+    profiles: sourceProfiles,
+    source,
+  })
+  return {
+    profiles: sourceProfiles,
+    selected:
+      sourceProfiles.find((profile) => profile.id === selectedID) ?? null,
+    selectedID,
+    source,
   }
 }
 
@@ -168,24 +231,34 @@ function workspaceActions({
 }: WorkspaceActionDeps) {
   return {
     apply: () =>
-      applySelected(source, selected, dirty, agentMutations.apply.mutateAsync),
-    save: () =>
-      saveSelected(
+      applySelected({
+        apply: agentMutations.apply.mutateAsync,
+        dirty,
         selected,
+        source,
+      }),
+    save: () =>
+      saveSelected({
+        create: profileMutations.create.mutateAsync,
         draft,
-        profileMutations.create.mutateAsync,
-        profileMutations.update.mutateAsync,
+        selected,
+        setDraftState,
         setProfileID,
-        setDraftState
-      ),
+        update: profileMutations.update.mutateAsync,
+      }),
     selectProfile: (id: string) =>
       changeProfile(id, setProfileID, setDraftState),
     selectSource: (id: string) =>
-      changeSource(id, setSourceID, setProfileID, setDraftState),
+      changeSource({ id, setDraftState, setProfileID, setSourceID }),
     startNew: () =>
       source &&
       setDraftState(
-        newDraft(source, selected, readQuery.data?.content ?? "", profiles)
+        newDraft({
+          fallbackContent: readQuery.data?.content ?? "",
+          profile: selected,
+          profiles,
+          source,
+        })
       ),
     updateDraft: (next: ProfileSaveInput) =>
       setDraftState({ key: selectedID ?? newProfileID, value: next }),
@@ -194,9 +267,15 @@ function workspaceActions({
 
 function ConfigSwitcher({ model }: { model: ConfigWorkspaceModel }) {
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-2 p-4">
-        <div className="grid gap-2 lg:grid-cols-[minmax(180px,260px)_minmax(260px,1fr)_auto]">
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle>切換配置</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        <div
+          data-slot="config-switcher-grid"
+          className="grid gap-2 lg:grid-cols-[minmax(180px,260px)_minmax(260px,1fr)_auto]"
+        >
           <SourceSelect
             source={model.source}
             sources={model.sources}
@@ -205,7 +284,6 @@ function ConfigSwitcher({ model }: { model: ConfigWorkspaceModel }) {
           <ProfileSelect
             profileID={model.profileID}
             profiles={model.profiles}
-            selected={model.selected}
             source={model.source}
             onChange={model.selectProfile}
             onCreate={model.startNew}
@@ -219,7 +297,10 @@ function ConfigSwitcher({ model }: { model: ConfigWorkspaceModel }) {
 
 function ConfigActions({ model }: { model: ConfigWorkspaceModel }) {
   return (
-    <div className="flex flex-wrap items-end justify-end gap-2">
+    <div
+      data-slot="config-actions"
+      className="flex flex-wrap items-end justify-end gap-2"
+    >
       <Button variant="outline" onClick={model.startNew}>
         <Plus data-icon="inline-start" />
         新增配置
@@ -249,17 +330,20 @@ function SourceSelect({
   sources: ConfigSource[]
   onChange: (id: string) => void
 }) {
+  const items = sources.map((item) => ({
+    label: sourceLabel(item, sources),
+    value: item.id,
+  }))
   return (
     <Field>
-      <FieldLabel>應用</FieldLabel>
+      <FieldLabel htmlFor="config-source">工具</FieldLabel>
       <Select
+        items={items}
         value={source?.id}
         onValueChange={(next) => next && onChange(next)}
       >
-        <SelectTrigger className="w-full">
-          <span className="truncate">
-            {source ? sourceLabel(source, sources) : "選擇應用"}
-          </span>
+        <SelectTrigger id="config-source" className="w-full">
+          <SelectValue />
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
@@ -278,31 +362,29 @@ function SourceSelect({
 function ProfileSelect({
   profileID,
   profiles,
-  selected,
   source,
   onChange,
   onCreate,
 }: {
   profileID: string | null
   profiles: Profile[]
-  selected: Profile | null
   source: ConfigSource | null
   onChange: (id: string) => void
   onCreate: () => void
 }) {
+  const items = profileSelectItems(profiles, source)
   return (
     <Field>
-      <FieldLabel>配置</FieldLabel>
+      <FieldLabel htmlFor="config-profile">配置</FieldLabel>
       <Select
+        items={items}
         value={profileID ?? newProfileID}
         onValueChange={(next) =>
           next === newProfileID ? onCreate() : next && onChange(next)
         }
       >
-        <SelectTrigger className="w-full">
-          <span className="truncate">
-            {selected ? profileLabel(selected, profiles) : "新增配置"}
-          </span>
+        <SelectTrigger id="config-profile" className="w-full">
+          <SelectValue />
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
@@ -329,7 +411,7 @@ function ConfigEditor({ model }: { model: ConfigWorkspaceModel }) {
     ? profileLabel(model.selected, model.profiles)
     : "新增配置"
   return (
-    <Card className="flex min-h-0 flex-col">
+    <Card size="sm" className="flex min-h-0 flex-col">
       <ConfigEditorHeader
         active={model.profileID === source.active_profile_id}
         title={model.profileID === newProfileID ? "新增配置" : title}
@@ -350,7 +432,7 @@ function ConfigEditorHeader({
 }) {
   return (
     <CardHeader>
-      <CardTitle className="flex min-w-0 items-center gap-2 text-base">
+      <CardTitle className="flex min-w-0 items-center gap-2">
         <span className="min-w-0 truncate">{title}</span>
         {active ? (
           <Badge variant="secondary">
@@ -373,8 +455,9 @@ function ConfigEditorFields({
   return (
     <FieldGroup>
       <Field>
-        <FieldLabel>名稱</FieldLabel>
+        <FieldLabel htmlFor="config-name">名稱</FieldLabel>
         <Input
+          id="config-name"
           value={draft.name}
           onChange={(event) =>
             onDraftChange({ ...draft, name: event.target.value })
@@ -382,8 +465,9 @@ function ConfigEditorFields({
         />
       </Field>
       <Field>
-        <FieldLabel>描述</FieldLabel>
+        <FieldLabel htmlFor="config-description">描述</FieldLabel>
         <Input
+          id="config-description"
           value={draft.description}
           onChange={(event) =>
             onDraftChange({ ...draft, description: event.target.value })
@@ -391,8 +475,9 @@ function ConfigEditorFields({
         />
       </Field>
       <Field>
-        <FieldLabel>內容</FieldLabel>
+        <FieldLabel htmlFor="config-content">內容</FieldLabel>
         <Textarea
+          id="config-content"
           value={draft.content}
           onChange={(event) =>
             onDraftChange({ ...draft, content: event.target.value })
@@ -414,134 +499,16 @@ function NoConfigurations() {
 
 function EmptyCard({ title, content }: { title: string; content: string }) {
   return (
-    <Card>
-      <CardContent className="flex min-h-72 items-center justify-center">
-        <Empty>
-          <EmptyHeader>
-            <FileCog />
-            <EmptyTitle>{title}</EmptyTitle>
-          </EmptyHeader>
-          <EmptyContent>{content}</EmptyContent>
-        </Empty>
-      </CardContent>
-    </Card>
+    <Empty className="min-h-72">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <FileCog />
+        </EmptyMedia>
+        <EmptyTitle>{title}</EmptyTitle>
+        <EmptyDescription>{content}</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   )
-}
-
-function selectedSource(sources: ConfigSource[], id: string | null) {
-  return sources.find((source) => source.id === id) ?? sources[0] ?? null
-}
-
-function selectedIDFor(
-  source: ConfigSource | null,
-  profiles: Profile[],
-  id: string | null,
-  draft: DraftState | null
-) {
-  if (draft?.key === newProfileID) return newProfileID
-  if (id && profiles.some((profile) => profile.id === id)) return id
-  if (
-    source?.active_profile_id &&
-    profiles.some((profile) => profile.id === source.active_profile_id)
-  )
-    return source.active_profile_id
-  return profiles[0]?.id ?? null
-}
-
-function profilesForSource(profiles: Profile[], source: ConfigSource | null) {
-  if (!source) return emptyProfiles
-  return profiles
-    .filter((profile) => profileMatchesSource(profile, source))
-    .toSorted((left, right) => compareProfiles(left, right, source))
-}
-
-function profileMatchesSource(profile: Profile, source: ConfigSource) {
-  if (profile.agent_id !== source.agent_id || profile.format !== source.format)
-    return false
-  return (
-    profile.name !== originalProfileName || isOriginalForSource(profile, source)
-  )
-}
-
-function compareProfiles(left: Profile, right: Profile, source: ConfigSource) {
-  const leftOriginal = isOriginalForSource(left, source)
-  const rightOriginal = isOriginalForSource(right, source)
-  if (leftOriginal !== rightOriginal) return leftOriginal ? -1 : 1
-  return timestamp(left.created_at) - timestamp(right.created_at)
-}
-
-function isOriginalForSource(profile: Profile, source: ConfigSource) {
-  return (
-    profile.name === originalProfileName && profile.description === source.name
-  )
-}
-
-function timestamp(value: string) {
-  return new Date(value).getTime()
-}
-
-function draftFor(
-  source: ConfigSource | null,
-  profile: Profile | null,
-  draft: DraftState | null,
-  fallbackContent: string
-) {
-  if (draft) return draft.value
-  if (profile) return profileToInput(profile)
-  if (!source) return null
-  return blankProfile(source, fallbackContent)
-}
-
-function newDraft(
-  source: ConfigSource,
-  profile: Profile | null,
-  fallbackContent: string,
-  profiles: Profile[]
-): DraftState {
-  const content = profile?.content || fallbackContent
-  const nextNumber = profiles.length + 1
-  return {
-    key: newProfileID,
-    value: { ...blankProfile(source, content), name: `配置 ${nextNumber}` },
-  }
-}
-
-function blankProfile(source: ConfigSource, content: string): ProfileSaveInput {
-  return {
-    agent_id: source.agent_id,
-    name: "",
-    description: "",
-    format: source.format,
-    content,
-  }
-}
-
-function profileToInput(profile: Profile): ProfileSaveInput {
-  return {
-    agent_id: profile.agent_id,
-    name: profile.name,
-    description: profile.description,
-    format: profile.format,
-    content: profile.content,
-  }
-}
-
-function sourceLabel(source: ConfigSource, sources: ConfigSource[]) {
-  const sameApplicationCount = sources.filter(
-    (item) => item.agent_name === source.agent_name
-  ).length
-  if (sameApplicationCount < 2) return source.agent_name
-  return `${source.agent_name}：${fileName(source.path)}`
-}
-
-function fileName(path: string) {
-  return path.split(/[\\/]/).slice(-1)[0] || path
-}
-
-function profileLabel(profile: Profile, profiles: Profile[]) {
-  const index = profiles.findIndex((item) => item.id === profile.id)
-  const number = index >= 0 ? index + 1 : profiles.length + 1
-  return `配置 ${number}：${profile.name}`
 }
 
 function changeProfile(
@@ -553,23 +520,23 @@ function changeProfile(
   setDraftState(null)
 }
 
-function changeSource(
-  id: string,
-  setSourceID: (id: string | null) => void,
-  setProfileID: (id: string | null) => void,
-  setDraftState: (draft: DraftState | null) => void
-) {
+function changeSource({
+  id,
+  setDraftState,
+  setProfileID,
+  setSourceID,
+}: ChangeSourceOptions) {
   setSourceID(id)
   setProfileID(null)
   setDraftState(null)
 }
 
-function applySelected(
-  source: ConfigSource | null,
-  selected: Profile | null,
-  dirty: boolean,
-  apply: (input: { id: string; profileID: string }) => Promise<unknown>
-) {
+function applySelected({
+  apply,
+  dirty,
+  selected,
+  source,
+}: ApplySelectedOptions) {
   if (!source || !selected) return
   if (dirty) {
     toast.error("請先儲存，再套用配置。")
@@ -578,35 +545,35 @@ function applySelected(
   runAction(applyConfiguration(source, selected, apply))
 }
 
-function saveSelected(
-  selected: Profile | null,
-  draft: ProfileSaveInput | null,
-  create: (input: ProfileSaveInput) => Promise<Profile>,
-  update: (input: { id: string; input: ProfileSaveInput }) => Promise<Profile>,
-  setProfileID: (id: string) => void,
-  setDraftState: (draft: DraftState | null) => void
-) {
+function saveSelected({
+  create,
+  draft,
+  selected,
+  setDraftState,
+  setProfileID,
+  update,
+}: SaveSelectedOptions) {
   if (!draft) return
   runAction(
-    saveConfiguration(
-      selected,
-      draft,
+    saveConfiguration({
       create,
-      update,
+      draft,
+      selected,
+      setDraftState,
       setProfileID,
-      setDraftState
-    )
+      update,
+    })
   )
 }
 
-async function saveConfiguration(
-  selected: Profile | null,
-  draft: ProfileSaveInput,
-  create: (input: ProfileSaveInput) => Promise<Profile>,
-  update: (input: { id: string; input: ProfileSaveInput }) => Promise<Profile>,
-  setProfileID: (id: string) => void,
-  setDraftState: (draft: DraftState | null) => void
-) {
+async function saveConfiguration({
+  create,
+  draft,
+  selected,
+  setDraftState,
+  setProfileID,
+  update,
+}: SaveSelectedOptions & { draft: ProfileSaveInput }) {
   const saved = selected
     ? await update({ id: selected.id, input: draft })
     : await create(draft)

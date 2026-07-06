@@ -74,9 +74,10 @@ function PromptViewContent({
           <Button
             variant={prompt.favorite ? "secondary" : "outline"}
             size="icon-sm"
+            aria-label={prompt.favorite ? "取消收藏" : "加入收藏"}
             onClick={() => onToggleFavorite(prompt)}
           >
-            <Star />
+            <Star data-icon="inline-start" />
           </Button>
         </div>
         <PromptTags prompt={prompt} />
@@ -202,7 +203,6 @@ function PromptTagPicker({
               key={tag.id}
               variant={active ? "default" : "outline"}
               render={<button type="button" aria-pressed={active} />}
-              className="cursor-pointer"
               onClick={() => onDraftChange(toggleDraftTag(draft, tag.name))}
             >
               {tag.name}
@@ -302,7 +302,7 @@ function toggleDraftTag(draft: PromptDraft, tagName: string): PromptDraft {
 function PromptTags({ prompt }: { prompt: Prompt }) {
   if (prompt.tags.length === 0) return null
   return (
-    <div className="flex flex-wrap gap-1">
+    <div data-slot="prompt-tags" className="flex flex-wrap gap-1">
       {prompt.tags.map((tag) => (
         <Badge key={tag.id || tag.name} variant="secondary">
           {tag.name}

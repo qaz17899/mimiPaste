@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router"
 import { ClipboardList } from "lucide-react"
 
-import { cn } from "@/lib/utils"
 import {
   NAV_ITEMS,
   NAV_SECTIONS,
@@ -37,17 +36,17 @@ function SidebarNavSection({
   if (!items.length) return null
 
   return (
-    <SidebarGroup className={cn(compact && "pt-1")}>
+    <SidebarGroup>
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarGroupContent>
-        <SidebarMenu className={cn(compact ? "gap-0.5" : "gap-1")}>
+        <SidebarMenu>
           {items.map(({ key, to, label: itemLabel, icon: Icon }) => (
             <SidebarMenuItem key={key}>
               <SidebarMenuButton
                 render={<Link to={to} />}
                 isActive={currentKey === key}
+                size={compact ? "sm" : "default"}
                 tooltip={itemLabel}
-                className={cn(compact ? "h-8 text-[13px]" : "h-9")}
               >
                 <Icon />
                 <span>{itemLabel}</span>
@@ -61,54 +60,23 @@ function SidebarNavSection({
 }
 
 export function AppSidebar({ currentKey }: { currentKey: AppRouteKey }) {
-  const sections = NAV_SECTIONS.map((section) => ({
-    ...section,
-    items: NAV_ITEMS.filter((item) => item.section === section.key),
-  }))
-  const primarySections = sections.filter((section) => !section.pinned)
-  const pinnedSections = sections.filter((section) => section.pinned)
+  const { pinnedSections, primarySections } = sidebarSections()
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" className="pointer-events-none">
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <ClipboardList />
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="truncate font-medium">mimiPaste</span>
-                <span className="truncate text-xs text-sidebar-foreground/70">
-                  提示詞與配置
-                </span>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <SidebarBrand />
       </SidebarHeader>
       <SidebarContent>
-        {primarySections.map((section) => (
-          <SidebarNavSection
-            key={section.key}
-            items={section.items}
-            label={section.label}
-            currentKey={currentKey}
-          />
-        ))}
+        <SidebarSectionList
+          currentKey={currentKey}
+          sections={primarySections}
+        />
         {pinnedSections.length > 0 && (
-          <div className="mt-auto flex flex-col">
-            <SidebarSeparator className="my-2" />
-            {pinnedSections.map((section) => (
-              <SidebarNavSection
-                key={section.key}
-                items={section.items}
-                label={section.label}
-                currentKey={currentKey}
-                compact
-              />
-            ))}
-          </div>
+          <PinnedSidebarSections
+            currentKey={currentKey}
+            sections={pinnedSections}
+          />
         )}
       </SidebarContent>
       <SidebarFooter>
@@ -116,5 +84,76 @@ export function AppSidebar({ currentKey }: { currentKey: AppRouteKey }) {
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+  )
+}
+
+function sidebarSections() {
+  const sections = NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: NAV_ITEMS.filter((item) => item.section === section.key),
+  }))
+  return {
+    pinnedSections: sections.filter((section) => section.pinned),
+    primarySections: sections.filter((section) => !section.pinned),
+  }
+}
+
+function SidebarBrand() {
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton size="lg" className="pointer-events-none">
+          <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+            <ClipboardList />
+          </div>
+          <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="truncate font-medium">mimiPaste</span>
+            <span className="truncate text-xs text-sidebar-foreground/70">
+              提示詞與配置
+            </span>
+          </div>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  )
+}
+
+function SidebarSectionList({
+  currentKey,
+  sections,
+}: {
+  currentKey: AppRouteKey
+  sections: ReturnType<typeof sidebarSections>["primarySections"]
+}) {
+  return sections.map((section) => (
+    <SidebarNavSection
+      key={section.key}
+      items={section.items}
+      label={section.label}
+      currentKey={currentKey}
+    />
+  ))
+}
+
+function PinnedSidebarSections({
+  currentKey,
+  sections,
+}: {
+  currentKey: AppRouteKey
+  sections: ReturnType<typeof sidebarSections>["pinnedSections"]
+}) {
+  return (
+    <div className="mt-auto flex flex-col">
+      <SidebarSeparator className="my-2" />
+      {sections.map((section) => (
+        <SidebarNavSection
+          key={section.key}
+          items={section.items}
+          label={section.label}
+          currentKey={currentKey}
+          compact
+        />
+      ))}
+    </div>
   )
 }

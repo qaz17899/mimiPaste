@@ -21,4 +21,3 @@ export type ProfileSaveInput = {
 export type ProfileListResponse = {
   profiles: Profile[]
 }
-

@@ -12,7 +12,8 @@ export const queryKeys = {
   agents: {
     root: () => ["agents"] as const,
     configSources: () => ["agents", "config-sources"] as const,
-    configSourceRead: (id: string | null) => ["agents", "config-source-read", id] as const,
+    configSourceRead: (id: string | null) =>
+      ["agents", "config-source-read", id] as const,
   },
   profiles: {
     root: () => ["profiles"] as const,

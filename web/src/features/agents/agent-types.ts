@@ -59,4 +59,3 @@ export type CreateConfigSourceInput = {
   path: string
   format: "toml" | "json" | "text"
 }
-

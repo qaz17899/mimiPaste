@@ -17,4 +17,3 @@ export type BackupListResponse = {
 }
 
 export type { DiffResult }
-

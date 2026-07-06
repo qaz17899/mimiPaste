@@ -9,15 +9,21 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group"
 import {
   Select,
   SelectContent,
   SelectGroup,
   SelectItem,
   SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
@@ -34,6 +40,8 @@ import type {
 } from "@/features/prompts/prompt-types"
 
 export type PromptViewMode = "cards" | "list"
+
+const allTagsValue = "__all_tags__"
 
 type Props = {
   filters: PromptListFilters
@@ -57,59 +65,108 @@ export function PromptToolbar({
   onViewModeChange,
 }: Props) {
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-3 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Search />
-            搜尋提示詞
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <PromptViewModeToggle
-              viewMode={viewMode}
-              onViewModeChange={onViewModeChange}
-            />
-            <TagFilter
-              tags={tags}
-              value={filters.tag}
-              onChange={(tag) => onFiltersChange({ ...filters, tag })}
-            />
-            <SortSelect
-              value={filters.sort}
-              onChange={(sort) => onFiltersChange({ ...filters, sort })}
-            />
-            <FavoriteFilter
-              checked={filters.favoriteOnly}
-              onChange={(favoriteOnly) =>
-                onFiltersChange({ ...filters, favoriteOnly })
-              }
-            />
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-0 flex-1 sm:min-w-72">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={filters.query}
-              onChange={(event) =>
-                onFiltersChange({ ...filters, query: event.target.value })
-              }
-              placeholder="搜尋提示詞..."
-              className="pl-8"
-            />
-          </div>
-          <ImportButton onImport={onImport} />
-          <Button variant="outline" onClick={onExport}>
-            <Download data-icon="inline-start" />
-            匯出
-          </Button>
-          <Button onClick={onCreate}>
-            <Plus data-icon="inline-start" />
-            新增提示詞
-          </Button>
-        </div>
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Search />
+          搜尋提示詞
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        <ToolbarFilters
+          filters={filters}
+          tags={tags}
+          viewMode={viewMode}
+          onFiltersChange={onFiltersChange}
+          onViewModeChange={onViewModeChange}
+        />
+        <ToolbarSearchActions
+          filters={filters}
+          onCreate={onCreate}
+          onExport={onExport}
+          onFiltersChange={onFiltersChange}
+          onImport={onImport}
+        />
       </CardContent>
     </Card>
+  )
+}
+
+function ToolbarFilters({
+  filters,
+  tags,
+  viewMode,
+  onFiltersChange,
+  onViewModeChange,
+}: Pick<Props, "filters" | "tags" | "viewMode"> &
+  Pick<Props, "onFiltersChange" | "onViewModeChange">) {
+  return (
+    <div data-slot="prompt-toolbar-filters" className="flex justify-end">
+      <div className="flex flex-wrap items-center gap-2">
+        <PromptViewModeToggle
+          viewMode={viewMode}
+          onViewModeChange={onViewModeChange}
+        />
+        <TagFilter
+          tags={tags}
+          value={filters.tag}
+          onChange={(tag) => onFiltersChange({ ...filters, tag })}
+        />
+        <SortSelect
+          value={filters.sort}
+          onChange={(sort) => onFiltersChange({ ...filters, sort })}
+        />
+        <FavoriteFilter
+          checked={filters.favoriteOnly}
+          onChange={(favoriteOnly) =>
+            onFiltersChange({ ...filters, favoriteOnly })
+          }
+        />
+      </div>
+    </div>
+  )
+}
+
+function ToolbarSearchActions({
+  filters,
+  onCreate,
+  onExport,
+  onFiltersChange,
+  onImport,
+}: Pick<Props, "filters"> &
+  Pick<Props, "onCreate" | "onExport" | "onFiltersChange" | "onImport">) {
+  return (
+    <div data-slot="prompt-toolbar-actions" className="flex flex-wrap gap-2">
+      <Field className="min-w-0 basis-full sm:min-w-72 sm:flex-1 sm:basis-auto">
+        <FieldLabel htmlFor="prompt-search" className="sr-only">
+          搜尋提示詞
+        </FieldLabel>
+        <InputGroup>
+          <InputGroupAddon>
+            <InputGroupText>
+              <Search />
+            </InputGroupText>
+          </InputGroupAddon>
+          <InputGroupInput
+            id="prompt-search"
+            value={filters.query}
+            onChange={(event) =>
+              onFiltersChange({ ...filters, query: event.target.value })
+            }
+            placeholder="搜尋提示詞..."
+          />
+        </InputGroup>
+      </Field>
+      <ImportButton onImport={onImport} />
+      <Button variant="outline" onClick={onExport}>
+        <Download data-icon="inline-start" />
+        匯出
+      </Button>
+      <Button onClick={onCreate}>
+        <Plus data-icon="inline-start" />
+        新增提示詞
+      </Button>
+    </div>
   )
 }
 
@@ -122,18 +179,24 @@ function TagFilter({
   value: string
   onChange: (value: string) => void
 }) {
-  const label = value || "全部標籤"
+  const items = [
+    { label: "全部標籤", value: allTagsValue },
+    ...tags.map((tag) => ({ label: tag.name, value: tag.name })),
+  ]
   return (
     <Select
-      value={value || "all"}
-      onValueChange={(next) => onChange(next === "all" || !next ? "" : next)}
+      items={items}
+      value={value || allTagsValue}
+      onValueChange={(next) =>
+        onChange(next === allTagsValue || !next ? "" : next)
+      }
     >
-      <SelectTrigger className="w-32">
-        <span className="truncate">{label}</span>
+      <SelectTrigger aria-label="篩選標籤" className="w-32">
+        <SelectValue />
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
-          <SelectItem value="all">全部標籤</SelectItem>
+          <SelectItem value={allTagsValue}>全部標籤</SelectItem>
           {tags.map((tag) => (
             <SelectItem key={tag.id} value={tag.name}>
               {tag.name}
@@ -152,33 +215,38 @@ function SortSelect({
   value: PromptSort
   onChange: (value: PromptSort) => void
 }) {
-  const label = sortLabels[value]
+  const items = sortOptions.map((option) => ({
+    label: option.label,
+    value: option.value,
+  }))
   return (
     <Select
+      items={items}
       value={value}
       onValueChange={(next) => onChange(next as PromptSort)}
     >
-      <SelectTrigger className="w-32">
-        <span className="truncate">{label}</span>
+      <SelectTrigger aria-label="排序提示詞" className="w-32">
+        <SelectValue />
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
-          <SelectItem value="updated">最近更新</SelectItem>
-          <SelectItem value="copied">最近複製</SelectItem>
-          <SelectItem value="copy_count">複製次數</SelectItem>
-          <SelectItem value="title">標題</SelectItem>
+          {sortOptions.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
         </SelectGroup>
       </SelectContent>
     </Select>
   )
 }
 
-const sortLabels: Record<PromptSort, string> = {
-  updated: "最近更新",
-  copied: "最近複製",
-  copy_count: "複製次數",
-  title: "標題",
-}
+const sortOptions: { label: string; value: PromptSort }[] = [
+  { label: "最近更新", value: "updated" },
+  { label: "最近複製", value: "copied" },
+  { label: "複製次數", value: "copy_count" },
+  { label: "標題", value: "title" },
+]
 
 function FavoriteFilter({
   checked,
@@ -192,11 +260,18 @@ function FavoriteFilter({
       orientation="horizontal"
       className="h-8 w-auto shrink-0 flex-row items-center gap-2"
     >
-      <FieldLabel className="flex items-center gap-1 text-sm">
+      <FieldLabel
+        htmlFor="prompt-favorite-filter"
+        className="flex items-center gap-1 text-sm"
+      >
         <Star />
         收藏
       </FieldLabel>
-      <Switch checked={checked} onCheckedChange={onChange} />
+      <Switch
+        id="prompt-favorite-filter"
+        checked={checked}
+        onCheckedChange={onChange}
+      />
     </Field>
   )
 }
@@ -220,14 +295,18 @@ function PromptViewModeToggle({
       size="sm"
     >
       <Tooltip>
-        <TooltipTrigger render={<ToggleGroupItem value="cards" />}>
-          <Grid2X2 />
+        <TooltipTrigger
+          render={<ToggleGroupItem value="cards" aria-label="卡片" />}
+        >
+          <Grid2X2 data-icon="inline-start" />
         </TooltipTrigger>
         <TooltipContent>卡片</TooltipContent>
       </Tooltip>
       <Tooltip>
-        <TooltipTrigger render={<ToggleGroupItem value="list" />}>
-          <List />
+        <TooltipTrigger
+          render={<ToggleGroupItem value="list" aria-label="列表" />}
+        >
+          <List data-icon="inline-start" />
         </TooltipTrigger>
         <TooltipContent>列表</TooltipContent>
       </Tooltip>
@@ -237,7 +316,7 @@ function PromptViewModeToggle({
 
 function ImportButton({ onImport }: { onImport: (file: File) => void }) {
   return (
-    <Button variant="outline" render={<label />}>
+    <Button variant="outline" render={<label />} nativeButton={false}>
       <Upload data-icon="inline-start" />
       匯入
       <input

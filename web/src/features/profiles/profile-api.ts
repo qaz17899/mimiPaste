@@ -1,6 +1,10 @@
 import { apiRequest, jsonInit } from "@/lib/api/client"
 
-import type { Profile, ProfileListResponse, ProfileSaveInput } from "@/features/profiles/profile-types"
+import type {
+  Profile,
+  ProfileListResponse,
+  ProfileSaveInput,
+} from "@/features/profiles/profile-types"
 
 export function fetchProfiles(agentID = "") {
   const params = new URLSearchParams()
@@ -19,4 +23,3 @@ export function updateProfile(id: string, input: ProfileSaveInput) {
 export function deleteProfile(id: string) {
   return apiRequest<void>(`/api/profiles/${id}`, { method: "DELETE" })
 }
-

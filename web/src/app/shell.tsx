@@ -37,7 +37,7 @@ export function AppShellLayout() {
             <ThemeToggle />
           </div>
         </header>
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto p-4 [scrollbar-gutter:stable] sm:p-6">
+        <main className="flex min-h-0 min-w-0 flex-1 [scrollbar-gutter:stable] flex-col overflow-y-auto p-4 sm:p-6">
           <Outlet />
         </main>
       </SidebarInset>

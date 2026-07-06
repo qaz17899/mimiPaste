@@ -9,4 +9,3 @@ export type Settings = {
 export type UpdateSettingsInput = {
   backup_dir: string
 }
-
