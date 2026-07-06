@@ -87,12 +87,30 @@ func TestApplyFailureDoesNotSetActiveProfile(t *testing.T) {
 	if err == nil {
 		t.Fatal("apply succeeded with failing filesystem")
 	}
-	sources, err := services.Agents.ListConfigSources(context.Background())
+	updatedSource, err := services.Agents.GetConfigSource(context.Background(), source.ID)
 	if err != nil {
-		t.Fatalf("list sources: %v", err)
+		t.Fatalf("read source: %v", err)
 	}
-	if sources[0].ActiveProfileID != nil {
-		t.Fatalf("active profile changed after failed apply: %#v", sources[0])
+	if updatedSource.ActiveProfileID != nil {
+		t.Fatalf("active profile changed after failed apply: %#v", updatedSource)
+	}
+}
+
+func TestEnsureProfileSeparatesOriginalConfigsByDescription(t *testing.T) {
+	services := newTestServices(t)
+	now := fixedClock{}.Now()
+	first := originalProfile("profile_original_one", "Claude settings.json", `{"theme":"dark"}`, now)
+	second := originalProfile("profile_original_two", "Claude .claude.json", `{"agents":[]}`, now)
+	savedFirst, err := services.Store.EnsureProfile(context.Background(), first)
+	if err != nil {
+		t.Fatalf("ensure first original: %v", err)
+	}
+	savedSecond, err := services.Store.EnsureProfile(context.Background(), second)
+	if err != nil {
+		t.Fatalf("ensure second original: %v", err)
+	}
+	if savedFirst.ID == savedSecond.ID {
+		t.Fatalf("original config profiles were shared: first=%#v second=%#v", savedFirst, savedSecond)
 	}
 }
 
@@ -114,6 +132,14 @@ func newTestServices(t *testing.T) *app.Services {
 	}
 	t.Cleanup(func() { _ = services.Store.Close() })
 	return services
+}
+
+func originalProfile(id string, description string, content string, now time.Time) profile.Profile {
+	return profile.Profile{
+		ID: id, AgentID: agent.BuiltInClaudeID, Name: "原本配置",
+		Description: description, Format: "json", Content: content,
+		CreatedAt: now, UpdatedAt: now,
+	}
 }
 
 func createSource(t *testing.T, services *app.Services, path string) agent.ConfigSource {

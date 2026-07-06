@@ -67,6 +67,27 @@ func (s *Store) CreateConfigSource(ctx context.Context, item agent.ConfigSource)
 	return s.GetConfigSource(ctx, item.ID)
 }
 
+func (s *Store) EnsureConfigSource(ctx context.Context, item agent.ConfigSource) (agent.ConfigSource, error) {
+	query := `
+		INSERT OR IGNORE INTO config_sources (id, agent_id, name, path, format, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`
+	_, err := s.db.ExecContext(ctx, query, item.ID, item.AgentID, item.Name, item.Path,
+		item.Format, sqlTime(item.CreatedAt), sqlTime(item.UpdatedAt))
+	if err != nil {
+		return agent.ConfigSource{}, fmt.Errorf("ensure config source: %w", err)
+	}
+	return s.GetConfigSourceByPath(ctx, item.Path)
+}
+
+func (s *Store) GetConfigSourceByPath(ctx context.Context, path string) (agent.ConfigSource, error) {
+	row := s.db.QueryRowContext(ctx, listConfigSourcesSQL()+" WHERE cs.path = ?", path)
+	item, err := scanConfigSource(row)
+	if err != nil {
+		return agent.ConfigSource{}, mapConfigSourceError(err)
+	}
+	return item, nil
+}
+
 func listAgentsSQL() string {
 	return `
 		SELECT a.id, a.name, a.kind, a.created_at,

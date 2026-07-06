@@ -9,11 +9,13 @@ type Repository interface {
 	Create(ctx context.Context, item Prompt) (Prompt, error)
 	CreateTag(ctx context.Context, name string, color *string) (Tag, error)
 	Delete(ctx context.Context, id string) error
+	DeleteTag(ctx context.Context, id string) error
 	Export(ctx context.Context) (ExportEnvelope, error)
 	Get(ctx context.Context, id string) (Prompt, error)
 	Import(ctx context.Context, prompts []Prompt) error
 	List(ctx context.Context, options ListOptions) ([]Prompt, error)
 	ListTags(ctx context.Context) ([]Tag, error)
 	RecordCopy(ctx context.Context, id string, copiedAt time.Time) (Prompt, error)
+	UpdateTag(ctx context.Context, tag Tag) (Tag, error)
 	Update(ctx context.Context, item Prompt) (Prompt, error)
 }

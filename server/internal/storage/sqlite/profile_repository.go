@@ -42,6 +42,22 @@ func (s *Store) CreateProfile(ctx context.Context, item profile.Profile) (profil
 	return s.GetProfile(ctx, item.ID)
 }
 
+func (s *Store) EnsureProfile(ctx context.Context, item profile.Profile) (profile.Profile, error) {
+	existing, err := s.profileBySignature(ctx, item)
+	if err == nil {
+		return existing, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return profile.Profile{}, err
+	}
+	return s.CreateProfile(ctx, item)
+}
+
+func (s *Store) profileBySignature(ctx context.Context, item profile.Profile) (profile.Profile, error) {
+	query := profileBaseQuery() + " WHERE p.agent_id = ? AND p.name = ? AND p.description = ? ORDER BY p.created_at LIMIT 1"
+	return scanProfile(s.db.QueryRowContext(ctx, query, item.AgentID, item.Name, item.Description))
+}
+
 func (s *Store) UpdateProfile(ctx context.Context, item profile.Profile) (profile.Profile, error) {
 	query := `
 		UPDATE profiles

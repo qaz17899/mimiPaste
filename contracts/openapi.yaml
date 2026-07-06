@@ -63,6 +63,17 @@ paths:
       operationId: createTag
       responses:
         "201": { description: Tag created. }
+  /api/tags/{id}:
+    put:
+      operationId: updateTag
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "200": { description: Tag updated. }
+    delete:
+      operationId: deleteTag
+      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      responses:
+        "204": { description: Tag deleted. }
   /api/export/prompts:
     get:
       operationId: exportPrompts

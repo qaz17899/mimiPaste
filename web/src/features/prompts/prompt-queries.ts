@@ -4,12 +4,15 @@ import { queryKeys } from "@/app/query-client"
 
 import {
   createPrompt,
+  createTag,
+  deleteTag,
   deletePrompt,
   exportPrompts,
   fetchPrompts,
   fetchTags,
   importPrompts,
   recordPromptCopy,
+  updateTag,
   updatePrompt,
 } from "@/features/prompts/prompt-api"
 import type {
@@ -34,7 +37,8 @@ export function useTags() {
 
 export function usePromptMutations() {
   const queryClient = useQueryClient()
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.prompts.root() })
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.prompts.root() })
   return {
     create: useMutation({ mutationFn: createPrompt, onSuccess: invalidate }),
     update: useMutation({
@@ -49,6 +53,23 @@ export function usePromptMutations() {
       onSuccess: invalidate,
     }),
     exportData: useMutation({ mutationFn: exportPrompts }),
+    createTag: useMutation({
+      mutationFn: createTag,
+      onSuccess: invalidate,
+    }),
+    updateTag: useMutation({
+      mutationFn: ({
+        id,
+        input,
+      }: {
+        id: string
+        input: { name: string; color?: string | null }
+      }) => updateTag(id, input),
+      onSuccess: invalidate,
+    }),
+    deleteTag: useMutation({
+      mutationFn: deleteTag,
+      onSuccess: invalidate,
+    }),
   }
 }
-

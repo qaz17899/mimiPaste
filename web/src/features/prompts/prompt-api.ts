@@ -10,7 +10,9 @@ import type {
 } from "@/features/prompts/prompt-types"
 
 export function fetchPrompts(filters: PromptListFilters) {
-  return apiRequest<PromptListResponse>(`/api/prompts?${promptSearchParams(filters)}`)
+  return apiRequest<PromptListResponse>(
+    `/api/prompts?${promptSearchParams(filters)}`
+  )
 }
 
 export function createPrompt(input: SavePromptInput) {
@@ -33,12 +35,30 @@ export function fetchTags() {
   return apiRequest<TagListResponse>("/api/tags")
 }
 
+export function createTag(input: { name: string; color?: string | null }) {
+  return apiRequest("/api/tags", jsonInit("POST", input))
+}
+
+export function updateTag(
+  id: string,
+  input: { name: string; color?: string | null }
+) {
+  return apiRequest(`/api/tags/${id}`, jsonInit("PUT", input))
+}
+
+export function deleteTag(id: string) {
+  return apiRequest<void>(`/api/tags/${id}`, { method: "DELETE" })
+}
+
 export function exportPrompts() {
   return apiRequest<PromptImportEnvelope>("/api/export/prompts")
 }
 
 export function importPrompts(input: PromptImportEnvelope) {
-  return apiRequest<{ status: "ok" }>("/api/import/prompts", jsonInit("POST", input))
+  return apiRequest<{ status: "ok" }>(
+    "/api/import/prompts",
+    jsonInit("POST", input)
+  )
 }
 
 function promptSearchParams(filters: PromptListFilters) {
@@ -49,4 +69,3 @@ function promptSearchParams(filters: PromptListFilters) {
   params.set("sort", filters.sort)
   return params.toString()
 }
-

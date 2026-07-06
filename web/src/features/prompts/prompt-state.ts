@@ -1,4 +1,8 @@
-import type { Prompt, PromptDraft, SavePromptInput } from "@/features/prompts/prompt-types"
+import type {
+  Prompt,
+  PromptDraft,
+  SavePromptInput,
+} from "@/features/prompts/prompt-types"
 
 export const emptyDraft: PromptDraft = {
   title: "",
@@ -54,4 +58,3 @@ export function formatDate(value?: string) {
     minute: "2-digit",
   }).format(new Date(value))
 }
-

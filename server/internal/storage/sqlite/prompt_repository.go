@@ -112,6 +112,36 @@ func (s *Store) CreateTag(ctx context.Context, name string, color *string) (prom
 	return prompt.Tag{ID: id, Name: name, Color: color}, nil
 }
 
+func (s *Store) UpdateTag(ctx context.Context, tag prompt.Tag) (prompt.Tag, error) {
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, "UPDATE tags SET name = ?, color = ? WHERE id = ?", tag.Name, tag.Color, tag.ID)
+		if err != nil {
+			return fmt.Errorf("update tag: %w", err)
+		}
+		if err := requireAffected(result, "找不到標籤。"); err != nil {
+			return err
+		}
+		return refreshAllPromptFTS(ctx, tx)
+	})
+	if err != nil {
+		return prompt.Tag{}, err
+	}
+	return tag, nil
+}
+
+func (s *Store) DeleteTag(ctx context.Context, id string) error {
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, "DELETE FROM tags WHERE id = ?", id)
+		if err != nil {
+			return fmt.Errorf("delete tag: %w", err)
+		}
+		if err := requireAffected(result, "找不到標籤。"); err != nil {
+			return err
+		}
+		return refreshAllPromptFTS(ctx, tx)
+	})
+}
+
 func (s *Store) Export(ctx context.Context) (prompt.ExportEnvelope, error) {
 	items, err := s.List(ctx, prompt.ListOptions{Sort: prompt.SortTitle})
 	if err != nil {
@@ -291,6 +321,36 @@ func refreshPromptFTS(ctx context.Context, tx *sql.Tx, promptID string) error {
 		return fmt.Errorf("refresh prompt search index: %w", err)
 	}
 	return nil
+}
+
+func refreshAllPromptFTS(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM prompts")
+	if err != nil {
+		return fmt.Errorf("list prompts for search refresh: %w", err)
+	}
+	defer rows.Close()
+	ids, err := scanPromptIDs(rows)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := refreshPromptFTS(ctx, tx, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func scanPromptIDs(rows *sql.Rows) ([]string, error) {
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan prompt id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 func promptFTSQuery() string {

@@ -40,6 +40,20 @@ func (s *Service) Create(ctx context.Context, input SaveInput) (Profile, error) 
 	return s.repo.CreateProfile(ctx, item)
 }
 
+func (s *Service) EnsureOriginal(ctx context.Context, input SaveInput) (Profile, error) {
+	clean, err := normalizeInput(input)
+	if err != nil {
+		return Profile{}, err
+	}
+	now := s.clock.Now()
+	item := Profile{
+		ID: core.NewID(), AgentID: clean.AgentID, Name: clean.Name,
+		Description: clean.Description, Format: clean.Format, Content: clean.Content,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	return s.repo.EnsureProfile(ctx, item)
+}
+
 func (s *Service) Update(ctx context.Context, id string, input SaveInput) (Profile, error) {
 	clean, err := normalizeInput(input)
 	if err != nil {

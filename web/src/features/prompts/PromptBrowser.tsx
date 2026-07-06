@@ -2,8 +2,19 @@ import { Copy, Star, Trash2 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import {
+  Empty,
+  EmptyContent,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -37,46 +48,78 @@ export function PromptBrowser(props: Props) {
   return <PromptCards {...props} />
 }
 
-function PromptCards({ prompts, selectedID, onCopy, onDelete, onSelect, onToggleFavorite }: Props) {
+function PromptCards({
+  prompts,
+  selectedID,
+  onCopy,
+  onDelete,
+  onSelect,
+  onToggleFavorite,
+}: Props) {
   return (
-    <div className="grid auto-rows-[190px] grid-cols-1 gap-3 xl:grid-cols-2">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
       {prompts.map((prompt) => (
         <Card
           key={prompt.id}
           role="button"
           tabIndex={0}
           data-selected={prompt.id === selectedID}
-          className={cn("cursor-pointer transition-colors data-[selected=true]:border-primary")}
+          className={cn(
+            "group min-h-[210px] cursor-pointer overflow-hidden transition-colors hover:bg-muted/30 data-[selected=true]:border-primary"
+          )}
           onClick={() => onSelect(prompt)}
           onKeyDown={(event) => {
             if (event.key === "Enter") onSelect(prompt)
           }}
         >
           <CardHeader className="pb-2">
-            <div className="flex items-start gap-2">
-              <CardTitle className="line-clamp-2 min-w-0 flex-1 text-base">{prompt.title}</CardTitle>
-              <PromptRowActions
-                prompt={prompt}
-                onCopy={onCopy}
-                onDelete={onDelete}
-                onToggleFavorite={onToggleFavorite}
-              />
+            <div className="flex min-w-0 items-start gap-2">
+              <CardTitle className="line-clamp-2 min-w-0 flex-1 text-sm leading-5">
+                {prompt.title}
+              </CardTitle>
+              <Button
+                variant={prompt.favorite ? "secondary" : "ghost"}
+                size="icon-sm"
+                aria-label={prompt.favorite ? "取消收藏" : "加入收藏"}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onToggleFavorite(prompt)
+                }}
+              >
+                <Star />
+              </Button>
             </div>
           </CardHeader>
-          <CardContent className="flex h-full flex-col gap-3">
-            <p className="line-clamp-2 min-h-10 text-sm text-muted-foreground">{prompt.description}</p>
+          <CardContent className="flex min-h-[92px] flex-col gap-3">
+            <p className="line-clamp-4 text-sm leading-6 text-muted-foreground">
+              {prompt.description || prompt.content}
+            </p>
             <PromptTags prompt={prompt} />
-            <div className="mt-auto text-xs text-muted-foreground">
-              {formatDate(prompt.last_copied_at)} · {prompt.copy_count} 次
-            </div>
           </CardContent>
+          <CardFooter className="mt-auto flex items-end justify-between gap-2 pt-0">
+            <span className="min-w-0 truncate text-xs text-muted-foreground">
+              {copySummary(prompt.copy_count)}
+            </span>
+            <PromptRowActions
+              prompt={prompt}
+              onCopy={onCopy}
+              onDelete={onDelete}
+            />
+          </CardFooter>
         </Card>
       ))}
     </div>
   )
 }
 
-function PromptTable({ prompts, selectedID, onCopy, onDelete, onSelect, onToggleFavorite }: Props) {
+function PromptTable({
+  prompts,
+  selectedID,
+  onCopy,
+  onDelete,
+  onSelect,
+  onToggleFavorite,
+}: Props) {
   return (
     <div className="rounded-lg border">
       <Table>
@@ -100,7 +143,9 @@ function PromptTable({ prompts, selectedID, onCopy, onDelete, onSelect, onToggle
               <TableCell className="max-w-80">
                 <div className="flex min-w-0 flex-col gap-1">
                   <span className="truncate font-medium">{prompt.title}</span>
-                  <span className="truncate text-xs text-muted-foreground">{prompt.description}</span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {prompt.description}
+                  </span>
                 </div>
               </TableCell>
               <TableCell>
@@ -133,21 +178,45 @@ function PromptRowActions({
   prompt: Prompt
   onCopy: (prompt: Prompt) => void
   onDelete: (prompt: Prompt) => void
-  onToggleFavorite: (prompt: Prompt) => void
+  onToggleFavorite?: (prompt: Prompt) => void
 }) {
   return (
-    <div className="flex shrink-0 justify-end gap-1" onClick={(event) => event.stopPropagation()}>
-      <Button variant={prompt.favorite ? "secondary" : "ghost"} size="icon-sm" onClick={() => onToggleFavorite(prompt)}>
-        <Star />
-      </Button>
-      <Button variant="ghost" size="icon-sm" onClick={() => onCopy(prompt)}>
+    <div
+      className="flex shrink-0 justify-end gap-1"
+      onClick={(event) => event.stopPropagation()}
+    >
+      {onToggleFavorite ? (
+        <Button
+          variant={prompt.favorite ? "secondary" : "ghost"}
+          size="icon-sm"
+          aria-label={prompt.favorite ? "取消收藏" : "加入收藏"}
+          onClick={() => onToggleFavorite(prompt)}
+        >
+          <Star />
+        </Button>
+      ) : null}
+      <Button
+        variant="secondary"
+        size="icon-sm"
+        aria-label="複製提示詞"
+        onClick={() => onCopy(prompt)}
+      >
         <Copy />
       </Button>
-      <Button variant="ghost" size="icon-sm" onClick={() => onDelete(prompt)}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="刪除提示詞"
+        onClick={() => onDelete(prompt)}
+      >
         <Trash2 />
       </Button>
     </div>
   )
+}
+
+function copySummary(copyCount: number) {
+  return copyCount > 0 ? `${copyCount} 次複製` : "尚未複製"
 }
 
 function PromptTags({ prompt }: { prompt: Prompt }) {
@@ -178,11 +247,10 @@ function EmptyPromptBrowser() {
 
 function PromptSkeleton() {
   return (
-    <div className="grid auto-rows-[190px] grid-cols-1 gap-3 xl:grid-cols-2">
-      {Array.from({ length: 4 }).map((_, index) => (
-        <Skeleton key={index} className="h-full rounded-lg" />
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
+      {Array.from({ length: 10 }).map((_, index) => (
+        <Skeleton key={index} className="min-h-[210px] rounded-lg" />
       ))}
     </div>
   )
 }
-

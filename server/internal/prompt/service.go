@@ -83,6 +83,18 @@ func (s *Service) CreateTag(ctx context.Context, name string, color *string) (Ta
 	return s.repo.CreateTag(ctx, name, color)
 }
 
+func (s *Service) UpdateTag(ctx context.Context, id string, name string, color *string) (Tag, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Tag{}, core.NewError(core.CodeInvalidInput, "標籤名稱不可空白。")
+	}
+	return s.repo.UpdateTag(ctx, Tag{ID: id, Name: name, Color: color})
+}
+
+func (s *Service) DeleteTag(ctx context.Context, id string) error {
+	return s.repo.DeleteTag(ctx, id)
+}
+
 func (s *Service) Export(ctx context.Context) (ExportEnvelope, error) {
 	return s.repo.Export(ctx)
 }

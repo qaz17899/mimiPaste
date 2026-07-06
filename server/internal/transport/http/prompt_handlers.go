@@ -16,6 +16,8 @@ func registerPromptRoutes(mux *http.ServeMux, service *prompt.Service) {
 	mux.HandleFunc("POST /api/prompts/{id}/copy", copyPrompt(service))
 	mux.HandleFunc("GET /api/tags", listTags(service))
 	mux.HandleFunc("POST /api/tags", createTag(service))
+	mux.HandleFunc("PUT /api/tags/{id}", updateTag(service))
+	mux.HandleFunc("DELETE /api/tags/{id}", deleteTag(service))
 	mux.HandleFunc("GET /api/export/prompts", exportPrompts(service))
 	mux.HandleFunc("POST /api/import/prompts", importPrompts(service))
 }
@@ -128,6 +130,36 @@ func createTag(service *prompt.Service) http.HandlerFunc {
 			return
 		}
 		writeJSON(writer, http.StatusCreated, tag)
+	}
+}
+
+func updateTag(service *prompt.Service) http.HandlerFunc {
+	type input struct {
+		Name  string  `json:"name"`
+		Color *string `json:"color"`
+	}
+	return func(writer http.ResponseWriter, request *http.Request) {
+		var body input
+		if err := decodeJSON(request, &body); err != nil {
+			writeError(writer, err)
+			return
+		}
+		tag, err := service.UpdateTag(request.Context(), request.PathValue("id"), body.Name, body.Color)
+		if err != nil {
+			writeError(writer, err)
+			return
+		}
+		writeJSON(writer, http.StatusOK, tag)
+	}
+}
+
+func deleteTag(service *prompt.Service) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		if err := service.DeleteTag(request.Context(), request.PathValue("id")); err != nil {
+			writeError(writer, err)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
 	}
 }
 
