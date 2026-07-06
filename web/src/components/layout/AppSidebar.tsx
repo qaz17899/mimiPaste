@@ -80,7 +80,7 @@ export function AppSidebar({ currentKey }: { currentKey: AppRouteKey }) {
               <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-medium">mimiPaste</span>
                 <span className="truncate text-xs text-sidebar-foreground/70">
-                  提示詞與 Agent 設定
+                  提示詞與配置
                 </span>
               </div>
             </SidebarMenuButton>

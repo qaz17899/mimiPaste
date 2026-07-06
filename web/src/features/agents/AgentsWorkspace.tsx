@@ -1,16 +1,10 @@
-import { useMemo, useState } from "react"
-import { FileCog, Plus, Save, ShieldCheck } from "lucide-react"
+import { Check, FileCog, Play, Plus, Save } from "lucide-react"
+import { useState } from "react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Empty,
   EmptyContent,
@@ -26,462 +20,608 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 
 import {
   useAgentMutations,
-  useAgents,
   useConfigSourceRead,
   useConfigSources,
 } from "@/features/agents/agent-queries"
+import type { ConfigSource } from "@/features/agents/agent-types"
+import {
+  useProfileMutations,
+  useProfiles,
+} from "@/features/profiles/profile-queries"
 import type {
-  ConfigSource,
-  CreateConfigSourceInput,
-} from "@/features/agents/agent-types"
+  Profile,
+  ProfileSaveInput,
+} from "@/features/profiles/profile-types"
 
-const emptyAgents: {
-  id: string
-  name: string
-  kind: string
-  config_source_count: number
-  profile_count: number
-}[] = []
+const newProfileID = "__new_profile__"
+const originalProfileName = "原本配置"
+const emptyProfiles: Profile[] = []
 const emptySources: ConfigSource[] = []
-const emptySource: CreateConfigSourceInput = {
-  agent_id: "",
-  name: "",
-  path: "",
-  format: "toml",
+
+type DraftState = {
+  key: string
+  value: ProfileSaveInput
+}
+
+type ConfigWorkspaceModel = {
+  dirty: boolean
+  draft: ProfileSaveInput | null
+  pending: boolean
+  profileID: string | null
+  profiles: Profile[]
+  selected: Profile | null
+  source: ConfigSource | null
+  sources: ConfigSource[]
+  apply: () => void
+  save: () => void
+  selectProfile: (id: string) => void
+  selectSource: (id: string) => void
+  startNew: () => void
+  updateDraft: (draft: ProfileSaveInput) => void
+}
+
+type WorkspaceActionDeps = {
+  agentMutations: ReturnType<typeof useAgentMutations>
+  dirty: boolean
+  draft: ProfileSaveInput | null
+  profileMutations: ReturnType<typeof useProfileMutations>
+  profiles: Profile[]
+  readQuery: ReturnType<typeof useConfigSourceRead>
+  selected: Profile | null
+  selectedID: string | null
+  setDraftState: (draft: DraftState | null) => void
+  setProfileID: (id: string | null) => void
+  setSourceID: (id: string | null) => void
+  source: ConfigSource | null
 }
 
 export function AgentsWorkspace() {
-  const agentsQuery = useAgents()
-  const sourcesQuery = useConfigSources()
-  const mutations = useAgentMutations()
-  const agents = agentsQuery.data?.agents ?? emptyAgents
-  const sources = sourcesQuery.data?.config_sources ?? emptySources
-  const [agentName, setAgentName] = useState("")
-  const [sourceForm, setSourceForm] =
-    useState<CreateConfigSourceInput>(emptySource)
-  const [selectedSourceID, setSelectedSourceID] = useState<string | null>(null)
-  const [contentDraft, setContentDraft] = useState<{
-    sourceID: string
-    content: string
-  } | null>(null)
-  const effectiveSourceID = selectedConfigSourceID(sources, selectedSourceID)
-  const readQuery = useConfigSourceRead(effectiveSourceID)
-  const selectedSource = useMemo(
-    () => sources.find((source) => source.id === effectiveSourceID) ?? null,
-    [sources, effectiveSourceID]
-  )
-  const content =
-    contentDraft?.sourceID === effectiveSourceID
-      ? contentDraft.content
-      : (readQuery.data?.content ?? "")
+  const model = useConfigWorkspace()
+  if (model.sources.length === 0) return <NoConfigFiles />
 
   return (
-    <section className="grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(360px,460px)] gap-4">
-      <div className="flex min-h-0 flex-col gap-4">
-        <AgentCards agents={agents} loading={agentsQuery.isLoading} />
-        <ConfigSourceForm
-          agents={agents}
-          form={sourceForm}
-          pending={mutations.createSource.isPending}
-          onChange={setSourceForm}
-          onSubmit={() =>
-            runAction(
-              createSource(
-                sourceForm,
-                mutations.createSource.mutateAsync,
-                setSourceForm
-              )
-            )
-          }
-        />
-        <ConfigSourceList
-          sources={sources}
-          selectedID={effectiveSourceID}
-          onSelect={setSelectedSourceID}
-        />
-      </div>
-      <aside className="flex min-h-0 flex-col gap-4">
-        <CustomAgentForm
-          value={agentName}
-          pending={mutations.createAgent.isPending}
-          onChange={setAgentName}
-          onSubmit={() =>
-            runAction(
-              createCustomAgent(
-                agentName,
-                mutations.createAgent.mutateAsync,
-                setAgentName
-              )
-            )
-          }
-        />
-        <ConfigEditor
-          source={selectedSource}
-          content={content}
-          fields={readQuery.data?.fields ?? []}
-          pending={
-            mutations.saveSource.isPending || mutations.validateSource.isPending
-          }
-          onContentChange={(next) =>
-            setContentDraft({
-              sourceID: effectiveSourceID ?? "",
-              content: next,
-            })
-          }
-          onSave={() =>
-            selectedSource &&
-            window.confirm("覆寫設定檔？") &&
-            runAction(
-              saveContent(
-                selectedSource.id,
-                content,
-                mutations.saveSource.mutateAsync
-              )
-            )
-          }
-          onValidate={() =>
-            selectedSource &&
-            runAction(
-              validateContent(
-                selectedSource.id,
-                content,
-                mutations.validateSource.mutateAsync
-              )
-            )
-          }
-        />
-      </aside>
+    <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+      <ConfigSwitcher model={model} />
+      <ConfigEditor model={model} />
     </section>
   )
 }
 
-function selectedConfigSourceID(
-  sources: ConfigSource[],
-  selectedID: string | null
-) {
-  if (selectedID && sources.some((source) => source.id === selectedID)) {
-    return selectedID
+function useConfigWorkspace(): ConfigWorkspaceModel {
+  const sources = useConfigSources().data?.config_sources ?? emptySources
+  const profiles = useProfiles().data?.profiles ?? emptyProfiles
+  const agentMutations = useAgentMutations()
+  const profileMutations = useProfileMutations()
+  const [sourceID, setSourceID] = useState<string | null>(null)
+  const [profileID, setProfileID] = useState<string | null>(null)
+  const [draftState, setDraftState] = useState<DraftState | null>(null)
+  const source = selectedSource(sources, sourceID)
+  const sourceProfiles = profilesForSource(profiles, source)
+  const selectedID = selectedIDFor(
+    source,
+    sourceProfiles,
+    profileID,
+    draftState
+  )
+  const selected =
+    sourceProfiles.find((profile) => profile.id === selectedID) ?? null
+  const readQuery = useConfigSourceRead(source?.id ?? null)
+  const content = readQuery.data?.content ?? ""
+  const draft = draftFor(source, selected, draftState, content)
+  const dirty = draftState !== null
+  const pending = mutationsPending(profileMutations, agentMutations)
+  const actions = workspaceActions({
+    agentMutations,
+    dirty,
+    draft,
+    profileMutations,
+    profiles: sourceProfiles,
+    readQuery,
+    selected,
+    selectedID,
+    setDraftState,
+    setProfileID,
+    setSourceID,
+    source,
+  })
+  return {
+    dirty,
+    draft,
+    pending,
+    profileID: selectedID,
+    profiles: sourceProfiles,
+    selected,
+    source,
+    sources,
+    ...actions,
   }
-  return sources[0]?.id ?? null
 }
 
-function AgentCards({
-  agents,
-  loading,
-}: {
-  agents: {
-    id: string
-    name: string
-    kind: string
-    config_source_count: number
-    profile_count: number
-  }[]
-  loading: boolean
-}) {
-  if (!loading && agents.length === 0) {
-    return <EmptyBlock title="尚無 Agent。" action="請新增 Agent。" />
-  }
+function mutationsPending(
+  profiles: ReturnType<typeof useProfileMutations>,
+  agents: ReturnType<typeof useAgentMutations>
+) {
   return (
-    <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-      {agents.map((agent) => (
-        <Card key={agent.id}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              {agent.name}
-              <Badge variant="secondary">
-                {agent.kind === "built-in" ? "內建" : "自訂"}
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            {agent.config_source_count} 個設定來源 · {agent.profile_count}{" "}
-            個設定檔
-          </CardContent>
-        </Card>
-      ))}
+    profiles.create.isPending ||
+    profiles.update.isPending ||
+    agents.apply.isPending
+  )
+}
+
+function workspaceActions({
+  agentMutations,
+  dirty,
+  draft,
+  profileMutations,
+  profiles,
+  readQuery,
+  selected,
+  selectedID,
+  setDraftState,
+  setProfileID,
+  setSourceID,
+  source,
+}: WorkspaceActionDeps) {
+  return {
+    apply: () =>
+      applySelected(source, selected, dirty, agentMutations.apply.mutateAsync),
+    save: () =>
+      saveSelected(
+        selected,
+        draft,
+        profileMutations.create.mutateAsync,
+        profileMutations.update.mutateAsync,
+        setProfileID,
+        setDraftState
+      ),
+    selectProfile: (id: string) =>
+      changeProfile(id, setProfileID, setDraftState),
+    selectSource: (id: string) =>
+      changeSource(id, setSourceID, setProfileID, setDraftState),
+    startNew: () =>
+      source &&
+      setDraftState(
+        newDraft(source, selected, readQuery.data?.content ?? "", profiles)
+      ),
+    updateDraft: (next: ProfileSaveInput) =>
+      setDraftState({ key: selectedID ?? newProfileID, value: next }),
+  }
+}
+
+function ConfigSwitcher({ model }: { model: ConfigWorkspaceModel }) {
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-2 p-4">
+        <div className="grid gap-2 lg:grid-cols-[minmax(180px,260px)_minmax(260px,1fr)_auto]">
+          <SourceSelect
+            source={model.source}
+            sources={model.sources}
+            onChange={model.selectSource}
+          />
+          <ProfileSelect
+            profileID={model.profileID}
+            profiles={model.profiles}
+            selected={model.selected}
+            source={model.source}
+            onChange={model.selectProfile}
+            onCreate={model.startNew}
+          />
+          <ConfigActions model={model} />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ConfigActions({ model }: { model: ConfigWorkspaceModel }) {
+  return (
+    <div className="flex flex-wrap items-end justify-end gap-2">
+      <Button variant="outline" onClick={model.startNew}>
+        <Plus data-icon="inline-start" />
+        新增配置
+      </Button>
+      <Button
+        variant="outline"
+        disabled={!model.draft || !model.dirty || model.pending}
+        onClick={model.save}
+      >
+        <Save data-icon="inline-start" />
+        儲存
+      </Button>
+      <Button disabled={!model.selected || model.pending} onClick={model.apply}>
+        <Play data-icon="inline-start" />
+        套用
+      </Button>
     </div>
   )
 }
 
-function ConfigSourceForm({
-  agents,
-  form,
-  pending,
-  onChange,
-  onSubmit,
-}: {
-  agents: { id: string; name: string }[]
-  form: CreateConfigSourceInput
-  pending: boolean
-  onChange: (form: CreateConfigSourceInput) => void
-  onSubmit: () => void
-}) {
-  const agentLabel =
-    agents.find((agent) => agent.id === form.agent_id)?.name ?? "選擇 Agent"
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>新增設定來源</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <FieldGroup>
-          <Field>
-            <FieldLabel>Agent 類型</FieldLabel>
-            <Select
-              value={form.agent_id || undefined}
-              onValueChange={(agent_id) => {
-                if (agent_id) onChange({ ...form, agent_id })
-              }}
-            >
-              <SelectTrigger className="w-full">
-                <span className="truncate">{agentLabel}</span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {agents.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <FieldLabel>設定檔名稱</FieldLabel>
-            <Input
-              value={form.name}
-              onChange={(event) =>
-                onChange({ ...form, name: event.target.value })
-              }
-            />
-          </Field>
-          <Field>
-            <FieldLabel>設定檔路徑</FieldLabel>
-            <Input
-              value={form.path}
-              onChange={(event) =>
-                onChange({ ...form, path: event.target.value })
-              }
-            />
-          </Field>
-        </FieldGroup>
-      </CardContent>
-      <CardFooter className="justify-end">
-        <Button disabled={pending} onClick={onSubmit}>
-          <Plus data-icon="inline-start" />
-          新增設定來源
-        </Button>
-      </CardFooter>
-    </Card>
-  )
-}
-
-function ConfigSourceList({
-  sources,
-  selectedID,
-  onSelect,
-}: {
-  sources: ConfigSource[]
-  selectedID: string | null
-  onSelect: (id: string) => void
-}) {
-  if (sources.length === 0)
-    return <EmptyBlock title="尚無設定來源。" action="請新增設定來源。" />
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>設定來源</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        {sources.map((source) => (
-          <button
-            key={source.id}
-            data-selected={source.id === selectedID}
-            className="flex min-w-0 items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/50 data-[selected=true]:border-primary"
-            onClick={() => onSelect(source.id)}
-          >
-            <FileCog className="shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">
-                {source.name}
-              </span>
-              <span className="block truncate text-xs text-muted-foreground">
-                {source.path}
-              </span>
-            </span>
-            <Badge variant="secondary">{source.agent_name}</Badge>
-            {source.active_profile_name ? (
-              <Badge variant="outline">{source.active_profile_name}</Badge>
-            ) : null}
-          </button>
-        ))}
-      </CardContent>
-    </Card>
-  )
-}
-
-function CustomAgentForm({
-  value,
-  pending,
-  onChange,
-  onSubmit,
-}: {
-  value: string
-  pending: boolean
-  onChange: (value: string) => void
-  onSubmit: () => void
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>自訂 Agent</CardTitle>
-      </CardHeader>
-      <CardContent className="flex gap-2">
-        <Input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Agent 名稱"
-        />
-        <Button disabled={pending} onClick={onSubmit}>
-          <Plus data-icon="inline-start" />
-          新增
-        </Button>
-      </CardContent>
-    </Card>
-  )
-}
-
-function ConfigEditor({
+function SourceSelect({
   source,
-  content,
-  fields,
-  pending,
-  onContentChange,
-  onSave,
-  onValidate,
+  sources,
+  onChange,
 }: {
   source: ConfigSource | null
-  content: string
-  fields: { key: string; value: string; sensitive: boolean }[]
-  pending: boolean
-  onContentChange: (content: string) => void
-  onSave: () => void
-  onValidate: () => void
+  sources: ConfigSource[]
+  onChange: (id: string) => void
 }) {
-  if (!source)
-    return <EmptyBlock title="請選擇設定來源。" action="可讀取與編輯內容。" />
   return (
-    <Card className="flex min-h-0 flex-1 flex-col">
-      <CardHeader>
-        <CardTitle>{source.name}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
-        <SafeFields fields={fields} />
-        <Separator />
-        <Textarea
-          value={content}
-          onChange={(event) => onContentChange(event.target.value)}
-          className="min-h-80 flex-1 font-mono"
-        />
+    <Field>
+      <FieldLabel>應用</FieldLabel>
+      <Select
+        value={source?.id}
+        onValueChange={(next) => next && onChange(next)}
+      >
+        <SelectTrigger className="w-full">
+          <span className="truncate">
+            {source ? sourceLabel(source, sources) : "選擇應用"}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {sources.map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+                {sourceLabel(item, sources)}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </Field>
+  )
+}
+
+function ProfileSelect({
+  profileID,
+  profiles,
+  selected,
+  source,
+  onChange,
+  onCreate,
+}: {
+  profileID: string | null
+  profiles: Profile[]
+  selected: Profile | null
+  source: ConfigSource | null
+  onChange: (id: string) => void
+  onCreate: () => void
+}) {
+  return (
+    <Field>
+      <FieldLabel>配置</FieldLabel>
+      <Select
+        value={profileID ?? newProfileID}
+        onValueChange={(next) =>
+          next === newProfileID ? onCreate() : next && onChange(next)
+        }
+      >
+        <SelectTrigger className="w-full">
+          <span className="truncate">
+            {selected ? profileLabel(selected, profiles) : "新增配置"}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {profiles.map((profile) => (
+              <SelectItem key={profile.id} value={profile.id}>
+                {profileLabel(profile, profiles)}
+              </SelectItem>
+            ))}
+            {source ? (
+              <SelectItem value={newProfileID}>新增配置</SelectItem>
+            ) : null}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </Field>
+  )
+}
+
+function ConfigEditor({ model }: { model: ConfigWorkspaceModel }) {
+  const draft = model.draft
+  const source = model.source
+  if (!source || !draft) return <NoConfigurations />
+  const title = model.selected
+    ? profileLabel(model.selected, model.profiles)
+    : "新增配置"
+  return (
+    <Card className="flex min-h-0 flex-col">
+      <ConfigEditorHeader
+        active={model.profileID === source.active_profile_id}
+        title={model.profileID === newProfileID ? "新增配置" : title}
+      />
+      <CardContent className="min-h-0">
+        <ConfigEditorFields draft={draft} onDraftChange={model.updateDraft} />
       </CardContent>
-      <CardFooter className="justify-end gap-2">
-        <Button variant="outline" disabled={pending} onClick={onValidate}>
-          <ShieldCheck data-icon="inline-start" />
-          驗證
-        </Button>
-        <Button disabled={pending} onClick={onSave}>
-          <Save data-icon="inline-start" />
-          儲存
-        </Button>
-      </CardFooter>
     </Card>
   )
 }
 
-function SafeFields({
-  fields,
+function ConfigEditorHeader({
+  active,
+  title,
 }: {
-  fields: { key: string; value: string; sensitive: boolean }[]
+  active: boolean
+  title: string
 }) {
-  if (fields.length === 0) return null
   return (
-    <div className="grid grid-cols-2 gap-2">
-      {fields.map((field) => (
-        <div key={field.key} className="min-w-0 rounded-lg border p-2">
-          <div className="truncate text-xs text-muted-foreground">
-            {field.key}
-          </div>
-          <div className="truncate text-sm">
-            {field.sensitive ? "••••••" : field.value}
-          </div>
-        </div>
-      ))}
-    </div>
+    <CardHeader>
+      <CardTitle className="flex min-w-0 items-center gap-2 text-base">
+        <span className="min-w-0 truncate">{title}</span>
+        {active ? (
+          <Badge variant="secondary">
+            <Check data-icon="inline-start" />
+            使用中
+          </Badge>
+        ) : null}
+      </CardTitle>
+    </CardHeader>
   )
 }
 
-function EmptyBlock({ title, action }: { title: string; action: string }) {
+function ConfigEditorFields({
+  draft,
+  onDraftChange,
+}: {
+  draft: ProfileSaveInput
+  onDraftChange: (draft: ProfileSaveInput) => void
+}) {
+  return (
+    <FieldGroup>
+      <Field>
+        <FieldLabel>名稱</FieldLabel>
+        <Input
+          value={draft.name}
+          onChange={(event) =>
+            onDraftChange({ ...draft, name: event.target.value })
+          }
+        />
+      </Field>
+      <Field>
+        <FieldLabel>描述</FieldLabel>
+        <Input
+          value={draft.description}
+          onChange={(event) =>
+            onDraftChange({ ...draft, description: event.target.value })
+          }
+        />
+      </Field>
+      <Field>
+        <FieldLabel>內容</FieldLabel>
+        <Textarea
+          value={draft.content}
+          onChange={(event) =>
+            onDraftChange({ ...draft, content: event.target.value })
+          }
+          className="min-h-[520px] font-mono text-sm"
+        />
+      </Field>
+    </FieldGroup>
+  )
+}
+
+function NoConfigFiles() {
+  return <EmptyCard title="尚未找到配置檔。" content="目前沒有可管理的配置。" />
+}
+
+function NoConfigurations() {
+  return <EmptyCard title="尚無配置。" content="請新增第一個配置。" />
+}
+
+function EmptyCard({ title, content }: { title: string; content: string }) {
   return (
     <Card>
-      <CardContent className="flex min-h-40 items-center justify-center">
+      <CardContent className="flex min-h-72 items-center justify-center">
         <Empty>
           <EmptyHeader>
+            <FileCog />
             <EmptyTitle>{title}</EmptyTitle>
           </EmptyHeader>
-          <EmptyContent>{action}</EmptyContent>
+          <EmptyContent>{content}</EmptyContent>
         </Empty>
       </CardContent>
     </Card>
   )
 }
 
-async function createSource(
-  form: CreateConfigSourceInput,
-  create: (input: CreateConfigSourceInput) => Promise<unknown>,
-  setForm: (form: CreateConfigSourceInput) => void
-) {
-  await create(form)
-  setForm(emptySource)
-  toast.success("設定來源已新增。")
+function selectedSource(sources: ConfigSource[], id: string | null) {
+  return sources.find((source) => source.id === id) ?? sources[0] ?? null
 }
 
-async function createCustomAgent(
-  name: string,
-  create: (name: string) => Promise<unknown>,
-  setName: (name: string) => void
+function selectedIDFor(
+  source: ConfigSource | null,
+  profiles: Profile[],
+  id: string | null,
+  draft: DraftState | null
 ) {
-  await create(name)
-  setName("")
-  toast.success("Agent 已新增。")
+  if (draft?.key === newProfileID) return newProfileID
+  if (id && profiles.some((profile) => profile.id === id)) return id
+  if (
+    source?.active_profile_id &&
+    profiles.some((profile) => profile.id === source.active_profile_id)
+  )
+    return source.active_profile_id
+  return profiles[0]?.id ?? null
 }
 
-async function saveContent(
+function profilesForSource(profiles: Profile[], source: ConfigSource | null) {
+  if (!source) return emptyProfiles
+  return profiles
+    .filter((profile) => profileMatchesSource(profile, source))
+    .toSorted((left, right) => compareProfiles(left, right, source))
+}
+
+function profileMatchesSource(profile: Profile, source: ConfigSource) {
+  if (profile.agent_id !== source.agent_id || profile.format !== source.format)
+    return false
+  return (
+    profile.name !== originalProfileName || isOriginalForSource(profile, source)
+  )
+}
+
+function compareProfiles(left: Profile, right: Profile, source: ConfigSource) {
+  const leftOriginal = isOriginalForSource(left, source)
+  const rightOriginal = isOriginalForSource(right, source)
+  if (leftOriginal !== rightOriginal) return leftOriginal ? -1 : 1
+  return timestamp(left.created_at) - timestamp(right.created_at)
+}
+
+function isOriginalForSource(profile: Profile, source: ConfigSource) {
+  return (
+    profile.name === originalProfileName && profile.description === source.name
+  )
+}
+
+function timestamp(value: string) {
+  return new Date(value).getTime()
+}
+
+function draftFor(
+  source: ConfigSource | null,
+  profile: Profile | null,
+  draft: DraftState | null,
+  fallbackContent: string
+) {
+  if (draft) return draft.value
+  if (profile) return profileToInput(profile)
+  if (!source) return null
+  return blankProfile(source, fallbackContent)
+}
+
+function newDraft(
+  source: ConfigSource,
+  profile: Profile | null,
+  fallbackContent: string,
+  profiles: Profile[]
+): DraftState {
+  const content = profile?.content || fallbackContent
+  const nextNumber = profiles.length + 1
+  return {
+    key: newProfileID,
+    value: { ...blankProfile(source, content), name: `配置 ${nextNumber}` },
+  }
+}
+
+function blankProfile(source: ConfigSource, content: string): ProfileSaveInput {
+  return {
+    agent_id: source.agent_id,
+    name: "",
+    description: "",
+    format: source.format,
+    content,
+  }
+}
+
+function profileToInput(profile: Profile): ProfileSaveInput {
+  return {
+    agent_id: profile.agent_id,
+    name: profile.name,
+    description: profile.description,
+    format: profile.format,
+    content: profile.content,
+  }
+}
+
+function sourceLabel(source: ConfigSource, sources: ConfigSource[]) {
+  const sameApplicationCount = sources.filter(
+    (item) => item.agent_name === source.agent_name
+  ).length
+  if (sameApplicationCount < 2) return source.agent_name
+  return `${source.agent_name}：${fileName(source.path)}`
+}
+
+function fileName(path: string) {
+  return path.split(/[\\/]/).slice(-1)[0] || path
+}
+
+function profileLabel(profile: Profile, profiles: Profile[]) {
+  const index = profiles.findIndex((item) => item.id === profile.id)
+  const number = index >= 0 ? index + 1 : profiles.length + 1
+  return `配置 ${number}：${profile.name}`
+}
+
+function changeProfile(
   id: string,
-  content: string,
-  save: (input: { id: string; content: string }) => Promise<unknown>
+  setProfileID: (id: string | null) => void,
+  setDraftState: (draft: DraftState | null) => void
 ) {
-  await save({ id, content })
-  toast.success("設定已儲存。")
+  setProfileID(id)
+  setDraftState(null)
 }
 
-async function validateContent(
+function changeSource(
   id: string,
-  content: string,
-  validate: (input: {
-    id: string
-    content: string
-  }) => Promise<{ valid: boolean; error?: string }>
+  setSourceID: (id: string | null) => void,
+  setProfileID: (id: string | null) => void,
+  setDraftState: (draft: DraftState | null) => void
 ) {
-  const result = await validate({ id, content })
-  if (!result.valid)
-    throw new Error(result.error || "設定格式有誤，請修正後再儲存。")
-  toast.success("設定格式正確。")
+  setSourceID(id)
+  setProfileID(null)
+  setDraftState(null)
+}
+
+function applySelected(
+  source: ConfigSource | null,
+  selected: Profile | null,
+  dirty: boolean,
+  apply: (input: { id: string; profileID: string }) => Promise<unknown>
+) {
+  if (!source || !selected) return
+  if (dirty) {
+    toast.error("請先儲存，再套用配置。")
+    return
+  }
+  runAction(applyConfiguration(source, selected, apply))
+}
+
+function saveSelected(
+  selected: Profile | null,
+  draft: ProfileSaveInput | null,
+  create: (input: ProfileSaveInput) => Promise<Profile>,
+  update: (input: { id: string; input: ProfileSaveInput }) => Promise<Profile>,
+  setProfileID: (id: string) => void,
+  setDraftState: (draft: DraftState | null) => void
+) {
+  if (!draft) return
+  runAction(
+    saveConfiguration(
+      selected,
+      draft,
+      create,
+      update,
+      setProfileID,
+      setDraftState
+    )
+  )
+}
+
+async function saveConfiguration(
+  selected: Profile | null,
+  draft: ProfileSaveInput,
+  create: (input: ProfileSaveInput) => Promise<Profile>,
+  update: (input: { id: string; input: ProfileSaveInput }) => Promise<Profile>,
+  setProfileID: (id: string) => void,
+  setDraftState: (draft: DraftState | null) => void
+) {
+  const saved = selected
+    ? await update({ id: selected.id, input: draft })
+    : await create(draft)
+  setProfileID(saved.id)
+  setDraftState(null)
+  toast.success("配置已儲存。")
+}
+
+async function applyConfiguration(
+  source: ConfigSource,
+  selected: Profile,
+  apply: (input: { id: string; profileID: string }) => Promise<unknown>
+) {
+  await apply({ id: source.id, profileID: selected.id })
+  toast.success("已套用配置。")
 }
 
 function runAction(action: Promise<unknown>) {

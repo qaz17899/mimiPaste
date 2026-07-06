@@ -1,20 +1,10 @@
 import type { ComponentType } from "react"
-import {
-  ArchiveRestore,
-  Bot,
-  FileSliders,
-  Settings2,
-  Sparkles,
-} from "lucide-react"
+import { ArchiveRestore, FileSliders, Settings2, Sparkles } from "lucide-react"
 
 export type AppRouteKey =
-  | "prompts"
-  | "agents"
-  | "profiles"
-  | "backups"
-  | "settings"
+  "prompts" | "agents" | "profiles" | "backups" | "settings"
 
-export type NavSectionKey = "workspace" | "agents" | "system"
+export type NavSectionKey = "workspace" | "config" | "system"
 
 type NavSection = {
   key: NavSectionKey
@@ -34,7 +24,7 @@ export type NavItem = {
 
 export const NAV_SECTIONS: readonly NavSection[] = [
   { key: "workspace", label: "工作區" },
-  { key: "agents", label: "Agent" },
+  { key: "config", label: "配置" },
   { key: "system", label: "系統", pinned: true },
 ]
 
@@ -50,20 +40,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
   },
   {
     key: "agents",
-    to: "/agents",
-    label: "Agent",
-    icon: Bot,
-    section: "agents",
-    subtitle: "Codex、Claude 與自訂 Agent",
-    maxWidth: "max-w-6xl",
-  },
-  {
-    key: "profiles",
-    to: "/profiles",
-    label: "設定檔",
+    to: "/configs",
+    label: "配置",
     icon: FileSliders,
-    section: "agents",
-    subtitle: "建立與套用 Agent 配置",
+    section: "config",
+    subtitle: "編輯、儲存與切換配置",
     maxWidth: "max-w-6xl",
   },
   {
@@ -92,5 +73,8 @@ export function getRouteMeta(routeKey: AppRouteKey): NavItem {
 
 export function routeKeyFromPathname(pathname: string): AppRouteKey {
   const normalized = pathname === "/" ? "/prompts" : pathname
+  if (normalized === "/agents") return "agents"
+  if (normalized === "/profiles") return "agents"
+  if (normalized === "/configs") return "agents"
   return NAV_ITEMS.find((item) => item.to === normalized)?.key ?? "prompts"
 }

@@ -5,10 +5,10 @@ import { Route as RootRoute } from "@/routes/__root"
 
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
-  path: "/profiles",
-  component: ProfilesRoute,
+  path: "/configs",
+  component: ConfigsRoute,
 })
 
-function ProfilesRoute() {
+function ConfigsRoute() {
   return <AgentsWorkspace />
 }
