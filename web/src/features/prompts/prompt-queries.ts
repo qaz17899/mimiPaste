@@ -8,10 +8,13 @@ import {
   deleteTag,
   deletePrompt,
   exportPrompts,
+  fetchPromptVersions,
   fetchPrompts,
   fetchTags,
   importPrompts,
+  previewImportPrompts,
   recordPromptCopy,
+  rollbackPrompt,
   updateTag,
   updatePrompt,
 } from "@/features/prompts/prompt-api"
@@ -35,6 +38,14 @@ export function useTags() {
   })
 }
 
+export function usePromptVersions(promptID: string | null) {
+  return useQuery({
+    enabled: promptID !== null,
+    queryKey: queryKeys.prompts.versions(promptID),
+    queryFn: () => fetchPromptVersions(promptID ?? ""),
+  })
+}
+
 export function usePromptMutations() {
   const queryClient = useQueryClient()
   const invalidate = () =>
@@ -48,9 +59,17 @@ export function usePromptMutations() {
     }),
     remove: useMutation({ mutationFn: deletePrompt, onSuccess: invalidate }),
     copy: useMutation({ mutationFn: recordPromptCopy, onSuccess: invalidate }),
+    rollback: useMutation({
+      mutationFn: ({ id, versionID }: { id: string; versionID: string }) =>
+        rollbackPrompt(id, versionID),
+      onSuccess: invalidate,
+    }),
     importData: useMutation({
       mutationFn: (input: PromptImportEnvelope) => importPrompts(input),
       onSuccess: invalidate,
+    }),
+    previewImport: useMutation({
+      mutationFn: (input: PromptImportEnvelope) => previewImportPrompts(input),
     }),
     exportData: useMutation({ mutationFn: exportPrompts }),
     createTag: useMutation({

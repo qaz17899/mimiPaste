@@ -4,188 +4,221 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/qaz17899/mimiPaste/server/internal/core"
 	"github.com/qaz17899/mimiPaste/server/internal/prompt"
 )
 
-func registerPromptRoutes(mux *http.ServeMux, service *prompt.Service) {
-	mux.HandleFunc("GET /api/prompts", listPrompts(service))
-	mux.HandleFunc("POST /api/prompts", createPrompt(service))
-	mux.HandleFunc("GET /api/prompts/{id}", getPrompt(service))
-	mux.HandleFunc("PUT /api/prompts/{id}", updatePromptHandler(service))
-	mux.HandleFunc("DELETE /api/prompts/{id}", deletePrompt(service))
-	mux.HandleFunc("POST /api/prompts/{id}/copy", copyPrompt(service))
-	mux.HandleFunc("GET /api/tags", listTags(service))
-	mux.HandleFunc("POST /api/tags", createTag(service))
-	mux.HandleFunc("PUT /api/tags/{id}", updateTag(service))
-	mux.HandleFunc("DELETE /api/tags/{id}", deleteTag(service))
-	mux.HandleFunc("GET /api/export/prompts", exportPrompts(service))
-	mux.HandleFunc("POST /api/import/prompts", importPrompts(service))
+func registerPromptRoutes(routes *apiRouteRegistrar, service *prompt.Service) {
+	routes.Handle(http.MethodGet, "/api/prompts", listPrompts(service))
+	routes.Handle(http.MethodPost, "/api/prompts", createPrompt(service))
+	routes.Handle(http.MethodGet, "/api/prompts/{id}", getPrompt(service))
+	routes.Handle(http.MethodPut, "/api/prompts/{id}", updatePromptHandler(service))
+	routes.Handle(http.MethodDelete, "/api/prompts/{id}", deletePrompt(service))
+	routes.Handle(http.MethodPost, "/api/prompts/{id}/copy", copyPrompt(service))
+	routes.Handle(http.MethodGet, "/api/prompts/{id}/versions", listPromptVersions(service))
+	routes.Handle(http.MethodPost, "/api/prompts/{id}/rollback", rollbackPrompt(service))
+	routes.Handle(http.MethodGet, "/api/tags", listTags(service))
+	routes.Handle(http.MethodPost, "/api/tags", createTag(service))
+	routes.Handle(http.MethodPut, "/api/tags/{id}", updateTag(service))
+	routes.Handle(http.MethodDelete, "/api/tags/{id}", deleteTag(service))
+	routes.Handle(http.MethodGet, "/api/export/prompts", exportPrompts(service))
+	routes.Handle(http.MethodPost, "/api/import/prompts/preview", previewImportPrompts(service))
+	routes.Handle(http.MethodPost, "/api/import/prompts/confirm", confirmImportPrompts(service))
+	routes.Handle(http.MethodPost, "/api/import/prompts", importPrompts(service))
 }
 
-func listPrompts(service *prompt.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
+func listPrompts(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
 		options := prompt.ListOptions{
-			Query: request.URL.Query().Get("q"), Tags: queryList(request, "tag"),
-			FavoriteOnly: request.URL.Query().Get("favorite") == "true",
-			Sort:         request.URL.Query().Get("sort"),
+			Query: ctx.request.URL.Query().Get("q"), Tags: queryList(ctx.request, "tag"),
+			FavoriteOnly: ctx.request.URL.Query().Get("favorite") == "true",
+			Sort:         ctx.request.URL.Query().Get("sort"),
 		}
-		items, err := service.List(request.Context(), options)
+		items, err := service.List(ctx.request.Context(), options)
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusOK, map[string]any{"prompts": items})
+		return ctx.writeJSON(http.StatusOK, map[string]any{"prompts": items})
 	}
 }
 
-func createPrompt(service *prompt.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
+func createPrompt(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
 		var input prompt.SaveInput
-		if err := decodeJSON(request, &input); err != nil {
-			writeError(writer, err)
-			return
+		if err := ctx.decodeJSON(&input); err != nil {
+			return err
 		}
-		item, err := service.Create(request.Context(), input)
+		item, err := service.Create(ctx.request.Context(), input)
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusCreated, item)
+		return ctx.writeJSON(http.StatusCreated, item)
 	}
 }
 
-func getPrompt(service *prompt.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
-		item, err := service.Get(request.Context(), request.PathValue("id"))
+func getPrompt(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
+		item, err := service.Get(ctx.request.Context(), ctx.pathValue("id"))
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusOK, item)
+		return ctx.writeJSON(http.StatusOK, item)
 	}
 }
 
-func updatePromptHandler(service *prompt.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
+func updatePromptHandler(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
 		var input prompt.SaveInput
-		if err := decodeJSON(request, &input); err != nil {
-			writeError(writer, err)
-			return
+		if err := ctx.decodeJSON(&input); err != nil {
+			return err
 		}
-		item, err := service.Update(request.Context(), request.PathValue("id"), input)
+		item, err := service.Update(ctx.request.Context(), ctx.pathValue("id"), input)
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusOK, item)
+		return ctx.writeJSON(http.StatusOK, item)
 	}
 }
 
-func deletePrompt(service *prompt.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
-		if err := service.Delete(request.Context(), request.PathValue("id")); err != nil {
-			writeError(writer, err)
-			return
+func deletePrompt(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
+		if err := service.Delete(ctx.request.Context(), ctx.pathValue("id")); err != nil {
+			return err
 		}
-		writer.WriteHeader(http.StatusNoContent)
+		return ctx.noContent()
 	}
 }
 
-func copyPrompt(service *prompt.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
-		item, err := service.RecordCopy(request.Context(), request.PathValue("id"))
+func copyPrompt(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
+		item, err := service.RecordCopy(ctx.request.Context(), ctx.pathValue("id"))
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusOK, item)
+		return ctx.writeJSON(http.StatusOK, item)
 	}
 }
 
-func listTags(service *prompt.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
-		tags, err := service.ListTags(request.Context())
+func listPromptVersions(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
+		versions, err := service.ListVersions(ctx.request.Context(), ctx.pathValue("id"))
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusOK, map[string]any{"tags": tags})
+		return ctx.writeJSON(http.StatusOK, map[string]any{"versions": versions})
 	}
 }
 
-func createTag(service *prompt.Service) http.HandlerFunc {
+func rollbackPrompt(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
+		var input prompt.RollbackInput
+		if err := ctx.decodeJSON(&input); err != nil {
+			return err
+		}
+		item, err := service.Rollback(ctx.request.Context(), ctx.pathValue("id"), input)
+		if err != nil {
+			return err
+		}
+		return ctx.writeJSON(http.StatusOK, item)
+	}
+}
+
+func listTags(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
+		tags, err := service.ListTags(ctx.request.Context())
+		if err != nil {
+			return err
+		}
+		return ctx.writeJSON(http.StatusOK, map[string]any{"tags": tags})
+	}
+}
+
+func createTag(service *prompt.Service) apiHandler {
 	type input struct {
 		Name  string  `json:"name"`
 		Color *string `json:"color"`
 	}
-	return func(writer http.ResponseWriter, request *http.Request) {
+	return func(ctx *apiContext) error {
 		var body input
-		if err := decodeJSON(request, &body); err != nil {
-			writeError(writer, err)
-			return
+		if err := ctx.decodeJSON(&body); err != nil {
+			return err
 		}
-		tag, err := service.CreateTag(request.Context(), body.Name, body.Color)
+		tag, err := service.CreateTag(ctx.request.Context(), body.Name, body.Color)
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusCreated, tag)
+		return ctx.writeJSON(http.StatusCreated, tag)
 	}
 }
 
-func updateTag(service *prompt.Service) http.HandlerFunc {
+func updateTag(service *prompt.Service) apiHandler {
 	type input struct {
 		Name  string  `json:"name"`
 		Color *string `json:"color"`
 	}
-	return func(writer http.ResponseWriter, request *http.Request) {
+	return func(ctx *apiContext) error {
 		var body input
-		if err := decodeJSON(request, &body); err != nil {
-			writeError(writer, err)
-			return
+		if err := ctx.decodeJSON(&body); err != nil {
+			return err
 		}
-		tag, err := service.UpdateTag(request.Context(), request.PathValue("id"), body.Name, body.Color)
+		tag, err := service.UpdateTag(ctx.request.Context(), ctx.pathValue("id"), body.Name, body.Color)
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusOK, tag)
+		return ctx.writeJSON(http.StatusOK, tag)
 	}
 }
 
-func deleteTag(service *prompt.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
-		if err := service.DeleteTag(request.Context(), request.PathValue("id")); err != nil {
-			writeError(writer, err)
-			return
+func deleteTag(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
+		if err := service.DeleteTag(ctx.request.Context(), ctx.pathValue("id")); err != nil {
+			return err
 		}
-		writer.WriteHeader(http.StatusNoContent)
+		return ctx.noContent()
 	}
 }
 
-func exportPrompts(service *prompt.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
-		envelope, err := service.Export(request.Context())
+func exportPrompts(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
+		envelope, err := service.Export(ctx.request.Context())
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusOK, envelope)
+		return ctx.writeJSON(http.StatusOK, envelope)
 	}
 }
 
-func importPrompts(service *prompt.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
+func importPrompts(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
+		return core.NewError(core.CodeInvalidInput, "請先預覽匯入資料。")
+	}
+}
+
+func previewImportPrompts(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
 		var envelope prompt.ImportEnvelope
-		if err := decodeJSON(request, &envelope); err != nil {
-			writeError(writer, err)
-			return
+		if err := ctx.decodeJSON(&envelope); err != nil {
+			return err
 		}
-		if err := service.Import(request.Context(), envelope); err != nil {
-			writeError(writer, err)
-			return
+		preview, err := service.PreviewImport(ctx.request.Context(), envelope)
+		if err != nil {
+			return err
 		}
-		writeJSON(writer, http.StatusOK, map[string]string{"status": "ok"})
+		return ctx.writeJSON(http.StatusOK, preview)
+	}
+}
+
+func confirmImportPrompts(service *prompt.Service) apiHandler {
+	return func(ctx *apiContext) error {
+		var envelope prompt.ImportEnvelope
+		if err := ctx.decodeJSON(&envelope); err != nil {
+			return err
+		}
+		result, err := service.Import(ctx.request.Context(), envelope)
+		if err != nil {
+			return err
+		}
+		return ctx.writeJSON(http.StatusOK, result)
 	}
 }
 

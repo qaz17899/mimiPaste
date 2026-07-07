@@ -29,9 +29,29 @@ export type ConfigField = {
 export type ConfigReadResult = {
   source: ConfigSource
   content: string
+  display_content: string
+  content_masked: boolean
   valid: boolean
   error?: string
   fields: ConfigField[]
+}
+
+export type ConfigOperation = {
+  id: string
+  kind: "apply" | "restore"
+  status: "running" | "completed" | "failed"
+  config_source_id: string
+  profile_id?: string
+  backup_id?: string
+  error_code?: string
+  error_detail?: string
+  created_at: string
+  updated_at: string
+}
+
+export type ConfigOperationResult = {
+  operation: ConfigOperation
+  config: ConfigReadResult
 }
 
 export type ValidationResult = {

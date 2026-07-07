@@ -32,6 +32,15 @@ func (s *Store) Create(ctx context.Context, item prompt.Prompt) (prompt.Prompt, 
 
 func (s *Store) Update(ctx context.Context, item prompt.Prompt) (prompt.Prompt, error) {
 	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		previous, err := readPromptTx(ctx, tx, item.ID)
+		if err != nil {
+			return err
+		}
+		if promptContentChanged(previous, item) {
+			if err := insertPromptVersion(ctx, tx, previous, item.UpdatedAt); err != nil {
+				return err
+			}
+		}
 		if err := updatePrompt(ctx, tx, item); err != nil {
 			return err
 		}
@@ -49,12 +58,33 @@ func (s *Store) Get(ctx context.Context, id string) (prompt.Prompt, error) {
 	if err != nil {
 		return prompt.Prompt{}, mapPromptReadError(err)
 	}
-	tags, err := s.promptTags(ctx, id)
+	tags, err := promptTags(ctx, s.db, id)
 	if err != nil {
 		return prompt.Prompt{}, err
 	}
 	item.Tags = tags
 	return item, nil
+}
+
+func (s *Store) FindExisting(ctx context.Context, ids []string) (map[string]prompt.Prompt, error) {
+	items := map[string]prompt.Prompt{}
+	if len(ids) == 0 {
+		return items, nil
+	}
+	query := "SELECT " + promptColumns + " FROM prompts p WHERE p.id IN (" + placeholders(len(ids)) + ")"
+	rows, err := s.db.QueryContext(ctx, query, stringArgs(ids)...)
+	if err != nil {
+		return nil, fmt.Errorf("find existing prompts: %w", err)
+	}
+	defer rows.Close()
+	prompts, err := s.scanPromptRows(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range prompts {
+		items[item.ID] = item
+	}
+	return items, nil
 }
 
 func (s *Store) List(ctx context.Context, options prompt.ListOptions) ([]prompt.Prompt, error) {
@@ -206,28 +236,70 @@ func (s *Store) scanPromptRows(ctx context.Context, rows *sql.Rows) ([]prompt.Pr
 		if err != nil {
 			return nil, fmt.Errorf("scan prompt: %w", err)
 		}
-		item.Tags, err = s.promptTags(ctx, item.ID)
-		if err != nil {
-			return nil, err
-		}
 		items = append(items, item)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	tags, err := s.promptTagsForPrompts(ctx, promptIDs(items))
+	if err != nil {
+		return nil, err
+	}
+	for index := range items {
+		items[index].Tags = tags[items[index].ID]
+	}
+	return items, nil
 }
 
-func (s *Store) promptTags(ctx context.Context, promptID string) ([]prompt.Tag, error) {
+func readPromptTx(ctx context.Context, tx *sql.Tx, id string) (prompt.Prompt, error) {
+	query := "SELECT " + promptColumns + " FROM prompts p WHERE p.id = ?"
+	item, err := scanPrompt(tx.QueryRowContext(ctx, query, id))
+	if err != nil {
+		return prompt.Prompt{}, mapPromptReadError(err)
+	}
+	tags, err := promptTags(ctx, tx, id)
+	if err != nil {
+		return prompt.Prompt{}, err
+	}
+	item.Tags = tags
+	return item, nil
+}
+
+func promptTags(ctx context.Context, queryer dbQueryer, promptID string) ([]prompt.Tag, error) {
 	query := `
 		SELECT t.id, t.name, t.color
 		FROM tags t
 		JOIN prompt_tags pt ON pt.tag_id = t.id
 		WHERE pt.prompt_id = ?
 		ORDER BY t.name`
-	rows, err := s.db.QueryContext(ctx, query, promptID)
+	rows, err := queryer.QueryContext(ctx, query, promptID)
 	if err != nil {
 		return nil, fmt.Errorf("list prompt tags: %w", err)
 	}
 	defer rows.Close()
 	return scanTags(rows)
+}
+
+func (s *Store) promptTagsForPrompts(
+	ctx context.Context,
+	promptIDs []string,
+) (map[string][]prompt.Tag, error) {
+	tagsByPrompt := map[string][]prompt.Tag{}
+	if len(promptIDs) == 0 {
+		return tagsByPrompt, nil
+	}
+	query := `
+		SELECT pt.prompt_id, t.id, t.name, t.color
+		FROM prompt_tags pt
+		JOIN tags t ON t.id = pt.tag_id
+		WHERE pt.prompt_id IN (` + placeholders(len(promptIDs)) + `)
+		ORDER BY t.name`
+	rows, err := s.db.QueryContext(ctx, query, stringArgs(promptIDs)...)
+	if err != nil {
+		return nil, fmt.Errorf("list prompt tags: %w", err)
+	}
+	defer rows.Close()
+	return scanPromptTagsByPrompt(rows)
 }
 
 func scanTags(rows *sql.Rows) ([]prompt.Tag, error) {
@@ -242,6 +314,29 @@ func scanTags(rows *sql.Rows) ([]prompt.Tag, error) {
 		tags = append(tags, tag)
 	}
 	return tags, rows.Err()
+}
+
+func scanPromptTagsByPrompt(rows *sql.Rows) (map[string][]prompt.Tag, error) {
+	tagsByPrompt := map[string][]prompt.Tag{}
+	for rows.Next() {
+		promptID, tag, err := scanPromptTag(rows)
+		if err != nil {
+			return nil, err
+		}
+		tagsByPrompt[promptID] = append(tagsByPrompt[promptID], tag)
+	}
+	return tagsByPrompt, rows.Err()
+}
+
+func scanPromptTag(row rowScanner) (string, prompt.Tag, error) {
+	var promptID string
+	var tag prompt.Tag
+	var color sql.NullString
+	if err := row.Scan(&promptID, &tag.ID, &tag.Name, &color); err != nil {
+		return "", prompt.Tag{}, fmt.Errorf("scan prompt tag: %w", err)
+	}
+	tag.Color = stringPointer(color)
+	return promptID, tag, nil
 }
 
 func insertPrompt(ctx context.Context, tx *sql.Tx, item prompt.Prompt) error {
@@ -353,6 +448,14 @@ func scanPromptIDs(rows *sql.Rows) ([]string, error) {
 	return ids, rows.Err()
 }
 
+func promptIDs(items []prompt.Prompt) []string {
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.ID)
+	}
+	return ids
+}
+
 func promptFTSQuery() string {
 	return `
 		SELECT p.title, p.content, p.description, COALESCE(group_concat(t.name, ' '), '')
@@ -389,6 +492,15 @@ func insertUsageEvent(ctx context.Context, tx *sql.Tx, promptID string, copiedAt
 }
 
 func upsertImportedPrompt(ctx context.Context, tx *sql.Tx, item prompt.Prompt) error {
+	previous, exists, err := existingPromptForHistory(ctx, tx, item.ID)
+	if err != nil {
+		return err
+	}
+	if exists && promptContentChanged(previous, item) {
+		if err := insertPromptVersion(ctx, tx, previous, item.UpdatedAt); err != nil {
+			return err
+		}
+	}
 	query := `
 		INSERT INTO prompts (
 			id, title, content, description, favorite, created_at, updated_at, copy_count
@@ -399,7 +511,7 @@ func upsertImportedPrompt(ctx context.Context, tx *sql.Tx, item prompt.Prompt) e
 			description = excluded.description,
 			favorite = excluded.favorite,
 			updated_at = excluded.updated_at`
-	_, err := tx.ExecContext(ctx, query, item.ID, item.Title, item.Content,
+	_, err = tx.ExecContext(ctx, query, item.ID, item.Title, item.Content,
 		item.Description, boolInt(item.Favorite), sqlTime(item.CreatedAt),
 		sqlTime(item.UpdatedAt), item.CopyCount)
 	if err != nil {
@@ -472,6 +584,22 @@ func requireAffected(result sql.Result, message string) error {
 		return core.NewError(core.CodeNotFound, message)
 	}
 	return nil
+}
+
+func placeholders(count int) string {
+	return strings.TrimRight(strings.Repeat("?,", count), ",")
+}
+
+func stringArgs(values []string) []any {
+	args := make([]any, 0, len(values))
+	for _, value := range values {
+		args = append(args, value)
+	}
+	return args
+}
+
+type dbQueryer interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 
 type dbExecutor interface {

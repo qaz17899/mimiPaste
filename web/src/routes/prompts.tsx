@@ -1,14 +1,11 @@
-import { createRoute } from "@tanstack/react-router"
-
-import { PromptWorkspace } from "@/features/prompts/PromptWorkspace"
+import { createRoute, lazyRouteComponent } from "@tanstack/react-router"
 import { Route as RootRoute } from "@/routes/__root"
 
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: "/prompts",
-  component: PromptsRoute,
+  component: lazyRouteComponent(
+    () => import("@/features/prompts/PromptWorkspace"),
+    "PromptWorkspace"
+  ),
 })
-
-function PromptsRoute() {
-  return <PromptWorkspace />
-}

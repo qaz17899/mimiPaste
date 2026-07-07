@@ -1,6 +1,5 @@
-import { Copy, Pencil, Save, Star, Trash2, X } from "lucide-react"
+import { Copy, History, Pencil, Save, Star, Trash2, X } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -15,6 +14,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 
 import { parseTags } from "@/features/prompts/prompt-state"
+import { PromptTagBadge } from "@/features/prompts/PromptTagBadge"
 import type {
   Prompt,
   PromptDraft,
@@ -36,6 +36,7 @@ type Props = {
   onDelete: (prompt: Prompt) => void
   onDraftChange: (draft: PromptDraft) => void
   onEdit: () => void
+  onHistory: (prompt: Prompt) => void
   onOpenChange: (open: boolean) => void
   onSave: () => void
   onToggleFavorite: (prompt: Prompt) => void
@@ -65,6 +66,7 @@ function PromptViewContent({
   onCopy,
   onDelete,
   onEdit,
+  onHistory,
   onToggleFavorite,
 }: Props & { prompt: Prompt }) {
   return (
@@ -101,6 +103,10 @@ function PromptViewContent({
         <Button variant="outline" onClick={onEdit}>
           <Pencil data-icon="inline-start" />
           編輯
+        </Button>
+        <Button variant="outline" onClick={() => onHistory(prompt)}>
+          <History data-icon="inline-start" />
+          歷史
         </Button>
         <Button variant="destructive" onClick={() => onDelete(prompt)}>
           <Trash2 data-icon="inline-start" />
@@ -204,14 +210,13 @@ function PromptTagPicker({
         {tags.map((tag) => {
           const active = selected.has(tag.name.toLocaleLowerCase())
           return (
-            <Badge
+            <PromptTagBadge
               key={tag.id}
-              variant={active ? "default" : "outline"}
+              active={active}
+              tag={tag}
               render={<button type="button" aria-pressed={active} />}
               onClick={() => onDraftChange(toggleDraftTag(draft, tag.name))}
-            >
-              {tag.name}
-            </Badge>
+            />
           )
         })}
       </div>
@@ -310,9 +315,7 @@ function PromptTags({ prompt }: { prompt: Prompt }) {
   return (
     <div data-slot="prompt-tags" className="flex flex-wrap gap-1">
       {prompt.tags.map((tag) => (
-        <Badge key={tag.id || tag.name} variant="secondary">
-          {tag.name}
-        </Badge>
+        <PromptTagBadge key={tag.id || tag.name} tag={tag} />
       ))}
     </div>
   )

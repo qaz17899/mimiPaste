@@ -6,85 +6,76 @@ import (
 	"github.com/qaz17899/mimiPaste/server/internal/configfile"
 )
 
-func registerConfigRoutes(mux *http.ServeMux, service *configfile.Service) {
-	mux.HandleFunc("GET /api/config-sources/{id}/read", readConfigSource(service))
-	mux.HandleFunc("POST /api/config-sources/{id}/validate", validateConfigSource(service))
-	mux.HandleFunc("PUT /api/config-sources/{id}/content", saveConfigSourceContent(service))
-	mux.HandleFunc("POST /api/config-sources/{id}/preview", previewConfigSource(service))
-	mux.HandleFunc("POST /api/config-sources/{id}/apply", applyConfigSource(service))
+func registerConfigRoutes(routes *apiRouteRegistrar, service *configfile.Service) {
+	routes.Handle(http.MethodGet, "/api/config-sources/{id}/read", readConfigSource(service))
+	routes.Handle(http.MethodPost, "/api/config-sources/{id}/validate", validateConfigSource(service))
+	routes.Handle(http.MethodPut, "/api/config-sources/{id}/content", saveConfigSourceContent(service))
+	routes.Handle(http.MethodPost, "/api/config-sources/{id}/preview", previewConfigSource(service))
+	routes.Handle(http.MethodPost, "/api/config-sources/{id}/apply", applyConfigSource(service))
 }
 
-func readConfigSource(service *configfile.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
-		result, err := service.Read(request.Context(), request.PathValue("id"))
+func readConfigSource(service *configfile.Service) apiHandler {
+	return func(ctx *apiContext) error {
+		result, err := service.Read(ctx.request.Context(), ctx.pathValue("id"))
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusOK, result)
+		return ctx.writeJSON(http.StatusOK, result)
 	}
 }
 
-func validateConfigSource(service *configfile.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
+func validateConfigSource(service *configfile.Service) apiHandler {
+	return func(ctx *apiContext) error {
 		var input configfile.ValidateInput
-		if err := decodeJSON(request, &input); err != nil {
-			writeError(writer, err)
-			return
+		if err := ctx.decodeJSON(&input); err != nil {
+			return err
 		}
-		result, err := service.Validate(request.Context(), request.PathValue("id"), input)
+		result, err := service.Validate(ctx.request.Context(), ctx.pathValue("id"), input)
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusOK, result)
+		return ctx.writeJSON(http.StatusOK, result)
 	}
 }
 
-func saveConfigSourceContent(service *configfile.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
+func saveConfigSourceContent(service *configfile.Service) apiHandler {
+	return func(ctx *apiContext) error {
 		var input configfile.SaveContentInput
-		if err := decodeJSON(request, &input); err != nil {
-			writeError(writer, err)
-			return
+		if err := ctx.decodeJSON(&input); err != nil {
+			return err
 		}
-		result, err := service.SaveContent(request.Context(), request.PathValue("id"), input)
+		result, err := service.SaveContent(ctx.request.Context(), ctx.pathValue("id"), input)
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusOK, result)
+		return ctx.writeJSON(http.StatusOK, result)
 	}
 }
 
-func previewConfigSource(service *configfile.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
+func previewConfigSource(service *configfile.Service) apiHandler {
+	return func(ctx *apiContext) error {
 		var input configfile.PreviewInput
-		if err := decodeJSON(request, &input); err != nil {
-			writeError(writer, err)
-			return
+		if err := ctx.decodeJSON(&input); err != nil {
+			return err
 		}
-		result, err := service.Preview(request.Context(), request.PathValue("id"), input)
+		result, err := service.Preview(ctx.request.Context(), ctx.pathValue("id"), input)
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusOK, result)
+		return ctx.writeJSON(http.StatusOK, result)
 	}
 }
 
-func applyConfigSource(service *configfile.Service) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
+func applyConfigSource(service *configfile.Service) apiHandler {
+	return func(ctx *apiContext) error {
 		var input configfile.ApplyInput
-		if err := decodeJSON(request, &input); err != nil {
-			writeError(writer, err)
-			return
+		if err := ctx.decodeJSON(&input); err != nil {
+			return err
 		}
-		result, err := service.Apply(request.Context(), request.PathValue("id"), input)
+		result, err := service.Apply(ctx.request.Context(), ctx.pathValue("id"), input)
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusOK, result)
+		return ctx.writeJSON(http.StatusOK, result)
 	}
 }

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router"
-import { ClipboardList } from "lucide-react"
+import { NotebookPen } from "lucide-react"
 
 import {
   NAV_ITEMS,
@@ -104,7 +104,7 @@ function SidebarBrand() {
       <SidebarMenuItem>
         <SidebarMenuButton size="lg" className="pointer-events-none">
           <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-            <ClipboardList />
+            <NotebookPen />
           </div>
           <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
             <span className="truncate font-medium">mimiPaste</span>

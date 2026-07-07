@@ -3,8 +3,11 @@ import { apiRequest, jsonInit } from "@/lib/api/client"
 import type {
   Prompt,
   PromptImportEnvelope,
+  PromptImportPreview,
+  PromptImportResult,
   PromptListFilters,
   PromptListResponse,
+  PromptVersionsResponse,
   SavePromptInput,
   TagListResponse,
 } from "@/features/prompts/prompt-types"
@@ -31,6 +34,17 @@ export function recordPromptCopy(id: string) {
   return apiRequest<Prompt>(`/api/prompts/${id}/copy`, jsonInit("POST"))
 }
 
+export function fetchPromptVersions(id: string) {
+  return apiRequest<PromptVersionsResponse>(`/api/prompts/${id}/versions`)
+}
+
+export function rollbackPrompt(id: string, versionID: string) {
+  return apiRequest<Prompt>(
+    `/api/prompts/${id}/rollback`,
+    jsonInit("POST", { version_id: versionID })
+  )
+}
+
 export function fetchTags() {
   return apiRequest<TagListResponse>("/api/tags")
 }
@@ -55,8 +69,15 @@ export function exportPrompts() {
 }
 
 export function importPrompts(input: PromptImportEnvelope) {
-  return apiRequest<{ status: "ok" }>(
-    "/api/import/prompts",
+  return apiRequest<PromptImportResult>(
+    "/api/import/prompts/confirm",
+    jsonInit("POST", input)
+  )
+}
+
+export function previewImportPrompts(input: PromptImportEnvelope) {
+  return apiRequest<PromptImportPreview>(
+    "/api/import/prompts/preview",
     jsonInit("POST", input)
   )
 }

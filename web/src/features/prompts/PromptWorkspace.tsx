@@ -19,12 +19,17 @@ import {
   PromptEditorDialog,
   type PromptPanelMode,
 } from "@/features/prompts/PromptEditorDialog"
+import { PromptHistoryDialog } from "@/features/prompts/PromptHistoryDialog"
+import { PromptImportDialog } from "@/features/prompts/PromptImportDialog"
 import {
   PromptToolbar,
   type PromptViewMode,
 } from "@/features/prompts/PromptToolbar"
+import { PromptVariableDialog } from "@/features/prompts/PromptVariableDialog"
+import { actionErrorMessage } from "@/lib/errors/display-policy"
 import {
   usePromptMutations,
+  usePromptVersions,
   usePrompts,
   useTags,
 } from "@/features/prompts/prompt-queries"
@@ -38,10 +43,17 @@ import type {
   Prompt,
   PromptDraft,
   PromptImportEnvelope,
+  PromptImportPreview,
   PromptListFilters,
   PromptTag,
+  PromptVersion,
   SavePromptInput,
 } from "@/features/prompts/prompt-types"
+import {
+  parsePromptVariables,
+  renderPromptTemplate,
+  type PromptVariableValues,
+} from "@/features/prompts/prompt-variables"
 
 const VIEW_MODE_KEY = "mimipaste.promptViewMode"
 const emptyPrompts: Prompt[] = []
@@ -56,10 +68,19 @@ type PromptIntent =
   { kind: "create" } | { kind: "select"; prompt: Prompt } | { kind: "close" }
 
 type PromptWorkspaceModel = {
+  copying: boolean
   dirty: boolean
   discardIntent: PromptIntent | null
   draft: PromptDraft
   filters: PromptListFilters
+  historyLoading: boolean
+  historyPending: boolean
+  historyPrompt: Prompt | null
+  historyVersions: PromptVersion[]
+  importDialogOpen: boolean
+  importError: string
+  importPending: boolean
+  importPreview: PromptImportPreview | null
   loading: boolean
   mode: PromptPanelMode
   pending: boolean
@@ -68,18 +89,26 @@ type PromptWorkspaceModel = {
   selectedID: string | null
   selectedPrompt: Prompt | null
   tags: PromptTag[]
+  variablePrompt: Prompt | null
   viewMode: PromptViewMode
 }
 
 type PromptWorkspaceActions = {
+  cancelVariableCopy: () => void
+  cancelImport: () => void
+  closeHistory: () => void
   closeEditor: () => void
   confirmDelete: () => void
   confirmDiscard: () => void
+  confirmVariableCopy: (prompt: Prompt, values: PromptVariableValues) => void
   copy: (prompt: Prompt) => void
   create: () => void
   edit: () => void
   exportData: () => void
   importData: (file: File) => void
+  openHistory: (prompt: Prompt) => void
+  rollbackVersion: (version: PromptVersion) => void
+  confirmImport: () => void
   save: () => void
   select: (prompt: Prompt) => void
   setDiscardIntent: (intent: PromptIntent | null) => void
@@ -124,6 +153,9 @@ function PromptWorkspaceView({ actions, model }: PromptWorkspaceController) {
       <PromptBrowserSection actions={actions} model={model} />
       <PromptEditorLayer actions={actions} model={model} />
       <PromptDeleteLayer actions={actions} model={model} />
+      <PromptHistoryLayer actions={actions} model={model} />
+      <PromptImportLayer actions={actions} model={model} />
+      <PromptVariableLayer actions={actions} model={model} />
       <PromptDiscardDialog
         open={model.discardIntent !== null}
         onConfirm={actions.confirmDiscard}
@@ -163,9 +195,49 @@ function PromptEditorLayer({ actions, model }: PromptWorkspaceController) {
       onDelete={actions.setPendingDelete}
       onDraftChange={actions.setDraft}
       onEdit={actions.edit}
+      onHistory={actions.openHistory}
       onOpenChange={(open) => !open && actions.closeEditor()}
       onSave={actions.save}
       onToggleFavorite={actions.toggleFavorite}
+    />
+  )
+}
+
+function PromptImportLayer({ actions, model }: PromptWorkspaceController) {
+  return (
+    <PromptImportDialog
+      error={model.importError}
+      open={model.importDialogOpen}
+      pending={model.importPending}
+      preview={model.importPreview}
+      onCancel={actions.cancelImport}
+      onConfirm={actions.confirmImport}
+    />
+  )
+}
+
+function PromptHistoryLayer({ actions, model }: PromptWorkspaceController) {
+  return (
+    <PromptHistoryDialog
+      loading={model.historyLoading}
+      open={model.historyPrompt !== null}
+      pending={model.historyPending}
+      prompt={model.historyPrompt}
+      versions={model.historyVersions}
+      onClose={actions.closeHistory}
+      onRollback={actions.rollbackVersion}
+    />
+  )
+}
+
+function PromptVariableLayer({ actions, model }: PromptWorkspaceController) {
+  return (
+    <PromptVariableDialog
+      open={model.variablePrompt !== null}
+      pending={model.copying}
+      prompt={model.variablePrompt}
+      onCancel={actions.cancelVariableCopy}
+      onConfirm={actions.confirmVariableCopy}
     />
   )
 }
@@ -183,7 +255,11 @@ function PromptDeleteLayer({ actions, model }: PromptWorkspaceController) {
 
 function usePromptWorkspace(): PromptWorkspaceController {
   const state = usePromptState()
-  const data = usePromptData(state.filters, state.selectedID)
+  const data = usePromptData(
+    state.filters,
+    state.selectedID,
+    state.historyPrompt?.id ?? null
+  )
   const dirty = !draftsEqual(state.draft, state.savedDraft)
 
   useUnsavedPromptGuard(dirty)
@@ -204,11 +280,24 @@ function usePromptState() {
   const [savedDraft, setSavedDraft] = useState<PromptDraft>(emptyDraft)
   const [pendingDelete, setPendingDelete] = useState<Prompt | null>(null)
   const [discardIntent, setDiscardIntent] = useState<PromptIntent | null>(null)
+  const [historyPrompt, setHistoryPrompt] = useState<Prompt | null>(null)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [importEnvelope, setImportEnvelope] =
+    useState<PromptImportEnvelope | null>(null)
+  const [importError, setImportError] = useState("")
+  const [importPreview, setImportPreview] =
+    useState<PromptImportPreview | null>(null)
+  const [variablePrompt, setVariablePrompt] = useState<Prompt | null>(null)
 
   return {
     discardIntent,
     draft,
     filters,
+    historyPrompt,
+    importDialogOpen,
+    importEnvelope,
+    importError,
+    importPreview,
     mode,
     pendingDelete,
     savedDraft,
@@ -216,24 +305,45 @@ function usePromptState() {
     setDiscardIntent,
     setDraft,
     setFilters,
+    setHistoryPrompt,
+    setImportDialogOpen,
+    setImportEnvelope,
+    setImportError,
+    setImportPreview,
     setMode,
     setPendingDelete,
     setSavedDraft,
     setSelectedID,
+    setVariablePrompt,
     setViewMode,
+    variablePrompt,
     viewMode,
   }
 }
 
-function usePromptData(filters: PromptListFilters, selectedID: string | null) {
+function usePromptData(
+  filters: PromptListFilters,
+  selectedID: string | null,
+  historyPromptID: string | null
+) {
   const promptsQuery = usePrompts(filters)
   const tagsQuery = useTags()
+  const versionsQuery = usePromptVersions(historyPromptID)
   const mutations = usePromptMutations()
   const prompts = promptsQuery.data?.prompts ?? emptyPrompts
   const selectedPrompt = useSelectedPrompt(prompts, selectedID)
   const pending = mutations.create.isPending || mutations.update.isPending
+  const copying = mutations.copy.isPending
+  const historyPending = mutations.rollback.isPending
+  const importPending =
+    mutations.previewImport.isPending || mutations.importData.isPending
 
   return {
+    copying,
+    historyLoading: versionsQuery.isLoading,
+    historyPending,
+    historyVersions: versionsQuery.data?.versions ?? [],
+    importPending,
     loading: promptsQuery.isLoading,
     mutations,
     pending,
@@ -249,10 +359,19 @@ function promptModel(
   dirty: boolean
 ): PromptWorkspaceModel {
   return {
+    copying: data.copying,
     dirty,
     discardIntent: state.discardIntent,
     draft: state.draft,
     filters: state.filters,
+    historyLoading: data.historyLoading,
+    historyPending: data.historyPending,
+    historyPrompt: state.historyPrompt,
+    historyVersions: data.historyVersions,
+    importDialogOpen: state.importDialogOpen,
+    importError: state.importError,
+    importPending: data.importPending,
+    importPreview: state.importPreview,
     loading: data.loading,
     mode: state.mode,
     pending: data.pending,
@@ -261,6 +380,7 @@ function promptModel(
     selectedID: state.selectedID,
     selectedPrompt: data.selectedPrompt,
     tags: data.tags,
+    variablePrompt: state.variablePrompt,
     viewMode: state.viewMode,
   }
 }
@@ -269,17 +389,23 @@ function usePromptActions(deps: PromptActionDeps): PromptWorkspaceActions {
   const { data, state } = deps
 
   return {
+    cancelImport: () => clearImportState(state),
+    cancelVariableCopy: () => state.setVariablePrompt(null),
+    closeHistory: () => state.setHistoryPrompt(null),
     closeEditor: () => requestPromptIntent({ kind: "close" }, deps),
     confirmDelete: () => runAction(confirmDeletePrompt(deps)),
     confirmDiscard: () => confirmPromptDiscard(deps),
-    copy: (prompt) =>
-      runAction(handleCopy(prompt, data.mutations.copy.mutateAsync)),
+    confirmVariableCopy: (prompt, values) =>
+      runAction(handleVariableCopy(prompt, values, deps)),
+    copy: (prompt) => runAction(copyPrompt(prompt, deps)),
     create: () => requestPromptIntent({ kind: "create" }, deps),
     edit: () => startEdit(data.selectedPrompt, state),
     exportData: () =>
       runAction(handleExport(data.mutations.exportData.mutateAsync)),
-    importData: (file) =>
-      runAction(handleImport(file, data.mutations.importData.mutateAsync)),
+    importData: (file) => runAction(previewImport(file, deps)),
+    openHistory: (prompt) => state.setHistoryPrompt(prompt),
+    rollbackVersion: (version) => runAction(rollbackPromptVersion(version, deps)),
+    confirmImport: () => runAction(confirmImport(deps)),
     save: () => runAction(savePrompt(deps)),
     select: (prompt) => requestPromptIntent({ kind: "select", prompt }, deps),
     setDiscardIntent: state.setDiscardIntent,
@@ -400,11 +526,45 @@ async function savePrompt({ data, state }: PromptActionDeps) {
   toast.success("提示詞已儲存。")
 }
 
+async function rollbackPromptVersion(
+  version: PromptVersion,
+  { data, state }: PromptActionDeps
+) {
+  const prompt = state.historyPrompt
+  if (!prompt) return
+  const restored = await data.mutations.rollback.mutateAsync({
+    id: prompt.id,
+    versionID: version.id,
+  })
+  if (state.selectedID === restored.id) selectPrompt(restored, state)
+  state.setHistoryPrompt(null)
+  toast.success("提示詞已還原。")
+}
+
+async function copyPrompt(prompt: Prompt, deps: PromptActionDeps) {
+  if (parsePromptVariables(prompt.content).length > 0) {
+    deps.state.setVariablePrompt(prompt)
+    return
+  }
+  await handleCopy(prompt, prompt.content, deps.data.mutations.copy.mutateAsync)
+}
+
+async function handleVariableCopy(
+  prompt: Prompt,
+  values: PromptVariableValues,
+  deps: PromptActionDeps
+) {
+  const content = renderPromptTemplate(prompt.content, values)
+  await handleCopy(prompt, content, deps.data.mutations.copy.mutateAsync)
+  deps.state.setVariablePrompt(null)
+}
+
 async function handleCopy(
   prompt: Prompt,
+  content: string,
   recordCopy: (id: string) => Promise<Prompt>
 ) {
-  await copyText(prompt.content)
+  await copyText(content)
   await recordCopy(prompt.id)
   toast.success("已複製。")
 }
@@ -444,12 +604,43 @@ async function handleExport(exportData: () => Promise<unknown>) {
   URL.revokeObjectURL(url)
 }
 
-async function handleImport(
-  file: File,
-  importData: (input: PromptImportEnvelope) => Promise<unknown>
-) {
-  await importData(JSON.parse(await file.text()) as PromptImportEnvelope)
+async function previewImport(file: File, { data, state }: PromptActionDeps) {
+  state.setImportDialogOpen(true)
+  state.setImportEnvelope(null)
+  state.setImportPreview(null)
+  state.setImportError("")
+  const envelope = await readImportEnvelope(file)
+  if (!envelope) {
+    state.setImportError("檔案不是有效的 JSON。")
+    return
+  }
+  const preview = await data.mutations.previewImport.mutateAsync(envelope)
+  state.setImportEnvelope(envelope)
+  state.setImportPreview(preview)
+}
+
+async function confirmImport({ data, state }: PromptActionDeps) {
+  if (!state.importEnvelope) return
+  await data.mutations.importData.mutateAsync(state.importEnvelope)
+  clearImportState(state)
   toast.success("匯入完成。")
+}
+
+async function readImportEnvelope(
+  file: File
+): Promise<PromptImportEnvelope | null> {
+  try {
+    return JSON.parse(await file.text()) as PromptImportEnvelope
+  } catch {
+    return null
+  }
+}
+
+function clearImportState(state: PromptState) {
+  state.setImportDialogOpen(false)
+  state.setImportEnvelope(null)
+  state.setImportError("")
+  state.setImportPreview(null)
 }
 
 function downloadURL(url: string, filename: string) {
@@ -489,7 +680,5 @@ function PromptDiscardDialog({
 }
 
 function runAction(action: Promise<unknown>) {
-  action.catch((error: unknown) =>
-    toast.error(error instanceof Error ? error.message : "操作失敗。")
-  )
+  action.catch((error: unknown) => toast.error(actionErrorMessage(error)))
 }

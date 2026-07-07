@@ -17,6 +17,18 @@ export type Prompt = {
   copy_count: number
 }
 
+export type PromptVersion = {
+  id: string
+  prompt_id: string
+  version: number
+  title: string
+  content: string
+  description: string
+  tags: PromptTag[]
+  favorite: boolean
+  created_at: string
+}
+
 export type PromptDraft = {
   title: string
   description: string
@@ -50,6 +62,10 @@ export type TagListResponse = {
   tags: PromptTag[]
 }
 
+export type PromptVersionsResponse = {
+  versions: PromptVersion[]
+}
+
 export type PromptImportEnvelope = {
   prompts: Array<{
     id?: string
@@ -59,4 +75,28 @@ export type PromptImportEnvelope = {
     tags?: string[]
     favorite?: boolean
   }>
+}
+
+export type PromptImportAction = "added" | "updated" | "skipped" | "invalid"
+
+export type PromptImportPreviewItem = {
+  index: number
+  id?: string
+  title?: string
+  action: PromptImportAction
+  code?: string
+  error?: string
+}
+
+export type PromptImportPreview = {
+  added: number
+  updated: number
+  skipped: number
+  invalid: number
+  items: PromptImportPreviewItem[]
+}
+
+export type PromptImportResult = {
+  status: "ok"
+  preview: PromptImportPreview
 }

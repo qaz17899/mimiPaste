@@ -6,6 +6,8 @@ export type Profile = {
   description: string
   format: "toml" | "json" | "text"
   content: string
+  display_content: string
+  content_masked: boolean
   created_at: string
   updated_at: string
 }
@@ -16,6 +18,7 @@ export type ProfileSaveInput = {
   description: string
   format: "toml" | "json" | "text"
   content: string
+  content_masked?: boolean
 }
 
 export type ProfileListResponse = {

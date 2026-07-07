@@ -21,6 +21,15 @@ type BackupRepository interface {
 	GetBackup(ctx context.Context, id string) (backup.Backup, error)
 }
 
+type OperationRepository interface {
+	CreateOperation(ctx context.Context, item Operation) (Operation, error)
+	UpdateOperation(ctx context.Context, item Operation) (Operation, error)
+}
+
+type SettingsRepository interface {
+	GetBackupDir(ctx context.Context) (string, error)
+}
+
 type ActiveProfileRepository interface {
 	SetActiveProfile(ctx context.Context, sourceID string, profileID string) error
 }

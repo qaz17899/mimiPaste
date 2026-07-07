@@ -24,12 +24,14 @@ type SelectedIDOptions = {
 type DraftForOptions = {
   draft: DraftState | null
   fallbackContent: string
+  fallbackContentMasked: boolean
   profile: Profile | null
   source: ConfigSource | null
 }
 
 type NewDraftOptions = {
   fallbackContent: string
+  fallbackContentMasked: boolean
   profile: Profile | null
   profiles: Profile[]
   source: ConfigSource
@@ -66,26 +68,32 @@ export function profilesForSource(
 export function draftFor({
   draft,
   fallbackContent,
+  fallbackContentMasked,
   profile,
   source,
 }: DraftForOptions) {
   if (draft) return draft.value
   if (profile) return profileToInput(profile)
   if (!source) return null
-  return blankProfile(source, fallbackContent)
+  return blankProfile(source, fallbackContent, fallbackContentMasked)
 }
 
 export function newDraft({
   fallbackContent,
+  fallbackContentMasked,
   profile,
   profiles,
   source,
 }: NewDraftOptions): DraftState {
-  const content = profile?.content || fallbackContent
+  const content = profile?.display_content || fallbackContent
+  const contentMasked = profile?.content_masked ?? fallbackContentMasked
   const nextNumber = profiles.length + 1
   return {
     key: newProfileID,
-    value: { ...blankProfile(source, content), name: `配置 ${nextNumber}` },
+    value: {
+      ...blankProfile(source, content, contentMasked),
+      name: `配置 ${nextNumber}`,
+    },
   }
 }
 
@@ -140,13 +148,18 @@ function timestamp(value: string) {
   return new Date(value).getTime()
 }
 
-function blankProfile(source: ConfigSource, content: string): ProfileSaveInput {
+function blankProfile(
+  source: ConfigSource,
+  content: string,
+  contentMasked = false
+): ProfileSaveInput {
   return {
     agent_id: source.agent_id,
     name: "",
     description: "",
     format: source.format,
     content,
+    content_masked: contentMasked,
   }
 }
 
@@ -156,7 +169,8 @@ function profileToInput(profile: Profile): ProfileSaveInput {
     name: profile.name,
     description: profile.description,
     format: profile.format,
-    content: profile.content,
+    content: profile.display_content || profile.content,
+    content_masked: profile.content_masked,
   }
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/qaz17899/mimiPaste/server/internal/configmask"
 	"github.com/qaz17899/mimiPaste/server/internal/core"
 	"github.com/qaz17899/mimiPaste/server/internal/platform/clock"
 )
@@ -19,11 +20,19 @@ func NewService(repo Repository, clock clock.Clock) *Service {
 
 func (s *Service) List(ctx context.Context, options ListOptions) ([]Profile, error) {
 	options.AgentID = strings.TrimSpace(options.AgentID)
-	return s.repo.ListProfiles(ctx, options)
+	items, err := s.repo.ListProfiles(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+	return maskProfiles(items), nil
 }
 
 func (s *Service) Get(ctx context.Context, id string) (Profile, error) {
-	return s.repo.GetProfile(ctx, id)
+	item, err := s.repo.GetProfile(ctx, id)
+	if err != nil {
+		return Profile{}, err
+	}
+	return maskProfile(item), nil
 }
 
 func (s *Service) Create(ctx context.Context, input SaveInput) (Profile, error) {
@@ -37,7 +46,11 @@ func (s *Service) Create(ctx context.Context, input SaveInput) (Profile, error) 
 		Description: clean.Description, Format: clean.Format, Content: clean.Content,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	return s.repo.CreateProfile(ctx, item)
+	created, err := s.repo.CreateProfile(ctx, item)
+	if err != nil {
+		return Profile{}, err
+	}
+	return maskProfile(created), nil
 }
 
 func (s *Service) EnsureOriginal(ctx context.Context, input SaveInput) (Profile, error) {
@@ -51,7 +64,11 @@ func (s *Service) EnsureOriginal(ctx context.Context, input SaveInput) (Profile,
 		Description: clean.Description, Format: clean.Format, Content: clean.Content,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	return s.repo.EnsureProfile(ctx, item)
+	ensured, err := s.repo.EnsureProfile(ctx, item)
+	if err != nil {
+		return Profile{}, err
+	}
+	return maskProfile(ensured), nil
 }
 
 func (s *Service) Update(ctx context.Context, id string, input SaveInput) (Profile, error) {
@@ -69,7 +86,11 @@ func (s *Service) Update(ctx context.Context, id string, input SaveInput) (Profi
 	item.Format = clean.Format
 	item.Content = clean.Content
 	item.UpdatedAt = s.clock.Now()
-	return s.repo.UpdateProfile(ctx, item)
+	updated, err := s.repo.UpdateProfile(ctx, item)
+	if err != nil {
+		return Profile{}, err
+	}
+	return maskProfile(updated), nil
 }
 
 func (s *Service) Delete(ctx context.Context, id string) error {
@@ -81,6 +102,9 @@ func normalizeInput(input SaveInput) (SaveInput, error) {
 	input.Name = strings.TrimSpace(input.Name)
 	input.Description = strings.TrimSpace(input.Description)
 	input.Format = strings.ToLower(strings.TrimSpace(input.Format))
+	if input.ContentMasked {
+		return SaveInput{}, core.NewError(core.CodeInvalidInput, "內容仍包含遮蔽值，請先顯示完整內容再儲存。")
+	}
 	if input.AgentID == "" || input.Name == "" || input.Content == "" {
 		return SaveInput{}, core.NewError(core.CodeInvalidInput, "設定檔資料不完整。")
 	}
@@ -88,4 +112,19 @@ func normalizeInput(input SaveInput) (SaveInput, error) {
 		return SaveInput{}, core.NewError(core.CodeUnsupportedFormat, "設定檔格式尚未支援。")
 	}
 	return input, nil
+}
+
+func maskProfiles(items []Profile) []Profile {
+	result := make([]Profile, 0, len(items))
+	for _, item := range items {
+		result = append(result, maskProfile(item))
+	}
+	return result
+}
+
+func maskProfile(item Profile) Profile {
+	masked := configmask.MaskContent(item.Format, item.Content)
+	item.DisplayContent = masked.Content
+	item.ContentMasked = masked.Masked
+	return item
 }

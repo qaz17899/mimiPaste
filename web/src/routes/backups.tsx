@@ -1,14 +1,11 @@
-import { createRoute } from "@tanstack/react-router"
-
-import { BackupsWorkspace } from "@/features/backups/BackupsWorkspace"
+import { createRoute, lazyRouteComponent } from "@tanstack/react-router"
 import { Route as RootRoute } from "@/routes/__root"
 
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: "/backups",
-  component: BackupsRoute,
+  component: lazyRouteComponent(
+    () => import("@/features/backups/BackupsWorkspace"),
+    "BackupsWorkspace"
+  ),
 })
-
-function BackupsRoute() {
-  return <BackupsWorkspace />
-}

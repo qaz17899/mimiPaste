@@ -2,6 +2,7 @@ import { apiRequest, jsonInit } from "@/lib/api/client"
 
 import type {
   Agent,
+  ConfigOperationResult,
   AgentListResponse,
   ConfigReadResult,
   ConfigSource,
@@ -56,7 +57,7 @@ export function previewConfigSource(id: string, profileID: string) {
 }
 
 export function applyConfigSource(id: string, profileID: string) {
-  return apiRequest<ConfigReadResult>(
+  return apiRequest<ConfigOperationResult>(
     `/api/config-sources/${id}/apply`,
     jsonInit("POST", { profile_id: profileID })
   )

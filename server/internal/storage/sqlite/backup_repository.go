@@ -28,22 +28,65 @@ func (s *Store) GetBackup(ctx context.Context, id string) (backup.Backup, error)
 	return item, nil
 }
 
+func (s *Store) DeleteBackup(ctx context.Context, id string) error {
+	result, err := s.db.ExecContext(ctx, "DELETE FROM config_backups WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("delete backup: %w", err)
+	}
+	return requireAffected(result, "找不到備份。")
+}
+
 func (s *Store) CreateBackup(ctx context.Context, item backup.Backup) (backup.Backup, error) {
 	query := `
-		INSERT INTO config_backups (id, config_source_id, profile_id, path, content, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)`
+		INSERT INTO config_backups (
+			id, config_source_id, profile_id, path, content, content_path, pinned, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.ExecContext(ctx, query, item.ID, item.ConfigSourceID,
-		item.ProfileID, item.Path, item.Content, sqlTime(item.CreatedAt))
+		item.ProfileID, item.Path, item.LegacyContent, item.ContentPath,
+		boolInt(item.Pinned), sqlTime(item.CreatedAt))
 	if err != nil {
 		return backup.Backup{}, fmt.Errorf("create backup: %w", err)
 	}
 	return s.GetBackup(ctx, item.ID)
 }
 
+func (s *Store) UpdateBackupPinned(
+	ctx context.Context,
+	id string,
+	pinned bool,
+) (backup.Backup, error) {
+	query := "UPDATE config_backups SET pinned = ? WHERE id = ?"
+	result, err := s.db.ExecContext(ctx, query, boolInt(pinned), id)
+	if err != nil {
+		return backup.Backup{}, fmt.Errorf("update backup pin: %w", err)
+	}
+	if err := requireAffected(result, "找不到備份。"); err != nil {
+		return backup.Backup{}, err
+	}
+	return s.GetBackup(ctx, id)
+}
+
+func (s *Store) UpdateBackupContentPath(
+	ctx context.Context,
+	id string,
+	contentPath string,
+) (backup.Backup, error) {
+	query := "UPDATE config_backups SET content_path = ?, content = '' WHERE id = ?"
+	result, err := s.db.ExecContext(ctx, query, contentPath, id)
+	if err != nil {
+		return backup.Backup{}, fmt.Errorf("update backup content path: %w", err)
+	}
+	if err := requireAffected(result, "找不到備份。"); err != nil {
+		return backup.Backup{}, err
+	}
+	return s.GetBackup(ctx, id)
+}
+
 func backupBaseQuery() string {
 	return `
 		SELECT cb.id, cb.config_source_id, cs.name, a.name, cb.profile_id,
-			p.name, cb.path, cb.content, cb.created_at
+			p.name, cb.path, cs.format, cb.content, cb.content_path,
+			cb.pinned, cb.created_at
 		FROM config_backups cb
 		JOIN config_sources cs ON cs.id = cb.config_source_id
 		JOIN agents a ON a.id = cs.agent_id
@@ -66,10 +109,14 @@ func scanBackup(row rowScanner) (backup.Backup, error) {
 	var item backup.Backup
 	var profileID, profileName sql.NullString
 	var createdAt string
+	var pinned int
 	err := row.Scan(&item.ID, &item.ConfigSourceID, &item.ConfigSourceName,
-		&item.AgentName, &profileID, &profileName, &item.Path, &item.Content, &createdAt)
+		&item.AgentName, &profileID, &profileName, &item.Path,
+		&item.Format, &item.LegacyContent, &item.ContentPath, &pinned,
+		&createdAt)
 	item.ProfileID = stringPointer(profileID)
 	item.ProfileName = stringPointer(profileName)
+	item.Pinned = pinned == 1
 	item.CreatedAt = parseTime(createdAt)
 	return item, err
 }

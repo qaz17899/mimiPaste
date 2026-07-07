@@ -31,6 +31,14 @@ func (s *Store) GetAppSettings(ctx context.Context) (AppSettings, error) {
 	return settings, nil
 }
 
+func (s *Store) GetBackupDir(ctx context.Context) (string, error) {
+	settings, err := s.GetAppSettings(ctx)
+	if err != nil {
+		return "", err
+	}
+	return settings.BackupDir, nil
+}
+
 func (s *Store) UpdateBackupDir(ctx context.Context, backupDir string, now time.Time) error {
 	query := "UPDATE app_settings SET value = ?, updated_at = ? WHERE key = ?"
 	_, err := s.db.ExecContext(ctx, query, backupDir, sqlTime(now), backupDirSettingKey)

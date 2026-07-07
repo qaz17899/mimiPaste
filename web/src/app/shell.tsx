@@ -14,6 +14,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { Toaster } from "@/components/ui/sonner"
+import { PromptCommandPalette } from "@/features/prompts/PromptCommandPalette"
 
 export function AppShellLayout() {
   const pathname = useLocation({ select: (location) => location.pathname })
@@ -33,7 +34,8 @@ export function AppShellLayout() {
               {meta.subtitle}
             </p>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <PromptCommandPalette />
             <ThemeToggle />
           </div>
         </header>

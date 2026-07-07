@@ -2,20 +2,25 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 
+	"github.com/pelletier/go-toml/v2"
 	"github.com/qaz17899/mimiPaste/server/internal/core"
 	"github.com/qaz17899/mimiPaste/server/internal/platform/clock"
+	"github.com/qaz17899/mimiPaste/server/internal/platform/filesystem"
 )
 
 type Service struct {
 	repo  Repository
 	clock clock.Clock
+	fs    filesystem.FileSystem
 }
 
-func NewService(repo Repository, clock clock.Clock) *Service {
-	return &Service{repo: repo, clock: clock}
+func NewService(repo Repository, clock clock.Clock, fs filesystem.FileSystem) *Service {
+	return &Service{repo: repo, clock: clock, fs: fs}
 }
 
 func (s *Service) EnsureBuiltIns(ctx context.Context) error {
@@ -61,7 +66,33 @@ func (s *Service) CreateConfigSource(
 	if err != nil {
 		return ConfigSource{}, err
 	}
+	if err := s.validateNewConfigSource(ctx, item); err != nil {
+		return ConfigSource{}, err
+	}
 	return s.repo.CreateConfigSource(ctx, item)
+}
+
+func (s *Service) validateNewConfigSource(ctx context.Context, item ConfigSource) error {
+	if err := s.ensureUniquePath(ctx, item.Path); err != nil {
+		return err
+	}
+	content, err := s.fs.ReadFile(item.Path)
+	if err != nil {
+		return core.NewErrorWithCause(core.CodeFileReadError, "無法讀取設定檔，請確認路徑與權限。", err)
+	}
+	return validateSourceContent(item.Format, content)
+}
+
+func (s *Service) ensureUniquePath(ctx context.Context, path string) error {
+	_, err := s.repo.GetConfigSourceByPath(ctx, path)
+	if err == nil {
+		return core.NewError(core.CodeConflict, "這個設定來源已存在。")
+	}
+	var appErr *core.AppError
+	if errors.As(err, &appErr) && appErr.Code == core.CodeNotFound {
+		return nil
+	}
+	return err
 }
 
 func (s *Service) normalizeConfigSource(input CreateConfigSourceInput) (ConfigSource, error) {
@@ -94,4 +125,20 @@ func normalizeFormat(format string) (string, error) {
 	default:
 		return "", core.NewError(core.CodeUnsupportedFormat, "設定檔格式尚未支援。")
 	}
+}
+
+func validateSourceContent(format string, content []byte) error {
+	switch format {
+	case "toml":
+		var data map[string]any
+		if err := toml.Unmarshal(content, &data); err != nil {
+			return core.NewErrorWithCause(core.CodeConfigParseError, "設定格式有誤，請修正後再儲存。", err)
+		}
+	case "json":
+		var data any
+		if err := json.Unmarshal(content, &data); err != nil {
+			return core.NewErrorWithCause(core.CodeConfigParseError, "設定格式有誤，請修正後再儲存。", err)
+		}
+	}
+	return nil
 }

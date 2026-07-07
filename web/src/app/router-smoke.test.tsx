@@ -1,5 +1,13 @@
 import { render, screen } from "@testing-library/react"
-import { beforeAll, describe, expect, it, vi } from "vitest"
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest"
 
 import { AppProviders } from "@/app/providers"
 
@@ -20,6 +28,14 @@ beforeAll(() => {
   })
 })
 
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(mockFetch))
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 describe("AppProviders", () => {
   it("renders the prompt workspace", async () => {
     render(<AppProviders />)
@@ -28,3 +44,16 @@ describe("AppProviders", () => {
     expect(screen.getAllByText("提示詞").length).toBeGreaterThan(0)
   })
 })
+
+function mockFetch(input: RequestInfo | URL): Response {
+  const path = String(input)
+  if (path.startsWith("/api/prompts")) return jsonResponse({ prompts: [] })
+  if (path === "/api/tags") return jsonResponse({ tags: [] })
+  return jsonResponse({})
+}
+
+function jsonResponse(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    headers: { "Content-Type": "application/json" },
+  })
+}

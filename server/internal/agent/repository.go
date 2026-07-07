@@ -11,6 +11,7 @@ type Repository interface {
 	EnsureBuiltInAgent(ctx context.Context, item Agent) error
 	EnsureConfigSource(ctx context.Context, item ConfigSource) (ConfigSource, error)
 	GetConfigSource(ctx context.Context, id string) (ConfigSource, error)
+	GetConfigSourceByPath(ctx context.Context, path string) (ConfigSource, error)
 	ListAgents(ctx context.Context) ([]Agent, error)
 	ListConfigSources(ctx context.Context) ([]ConfigSource, error)
 }

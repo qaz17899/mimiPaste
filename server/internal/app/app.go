@@ -35,15 +35,22 @@ func New(ctx context.Context, cfg settings.Config) (*Services, error) {
 	}
 	clock := clock.RealClock{}
 	fs := filesystem.OSFileSystem{}
-	agentService := agent.NewService(store, clock)
+	agentService := agent.NewService(store, clock, fs)
 	profileService := profile.NewService(store, clock)
-	backupService := backup.NewService(store)
-	configService := configfile.NewService(store, store, store, store, fs, clock)
+	backupService := backup.NewService(store, store, fs)
+	configService := configfile.NewService(configfile.ServiceDeps{
+		Active: store, Backups: store, Clock: clock, FS: fs,
+		Operations: store, Profiles: store, Settings: store, Sources: store,
+	})
 	if err := agentService.EnsureBuiltIns(ctx); err != nil {
 		_ = store.Close()
 		return nil, err
 	}
 	if err := store.EnsureDefaultSettings(ctx, cfg.BackupDir, clock.Now()); err != nil {
+		_ = store.Close()
+		return nil, err
+	}
+	if err := backupService.EnsureFileBacked(ctx); err != nil {
 		_ = store.Close()
 		return nil, err
 	}

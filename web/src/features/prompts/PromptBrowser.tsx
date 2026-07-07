@@ -1,7 +1,6 @@
 import { Copy, Star, Trash2 } from "lucide-react"
 import type { KeyboardEvent } from "react"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -30,6 +29,7 @@ import {
 import type { PromptViewMode } from "@/features/prompts/PromptToolbar"
 import { formatDate } from "@/features/prompts/prompt-state"
 import type { Prompt } from "@/features/prompts/prompt-types"
+import { PromptTagBadge } from "@/features/prompts/PromptTagBadge"
 
 type Props = {
   prompts: Prompt[]
@@ -106,8 +106,8 @@ function PromptCardItem({
         </p>
         <PromptTags prompt={prompt} />
       </CardContent>
-      <CardFooter className="mt-auto flex items-end justify-between gap-2 pt-0">
-        <span className="min-w-0 truncate text-xs text-muted-foreground">
+      <CardFooter className="mt-auto flex items-center justify-between gap-2 py-2">
+        <span className="flex h-7 min-w-0 items-center truncate text-xs text-muted-foreground">
           {copySummary(prompt.copy_count)}
         </span>
         <PromptRowActions prompt={prompt} onCopy={onCopy} onDelete={onDelete} />
@@ -263,7 +263,7 @@ function PromptRowActions({
   return (
     <div
       data-slot="prompt-row-actions"
-      className="flex shrink-0 justify-end gap-1"
+      className="flex shrink-0 items-center justify-end gap-1"
       onClick={(event) => event.stopPropagation()}
     >
       {onToggleFavorite ? (
@@ -277,7 +277,7 @@ function PromptRowActions({
         </Button>
       ) : null}
       <Button
-        variant="secondary"
+        variant="ghost"
         size="icon-sm"
         aria-label="複製提示詞"
         onClick={() => onCopy(prompt)}
@@ -315,9 +315,7 @@ function PromptTags({ prompt }: { prompt: Prompt }) {
   return (
     <div className="flex flex-wrap gap-1">
       {prompt.tags.map((tag) => (
-        <Badge key={tag.id || tag.name} variant="secondary">
-          {tag.name}
-        </Badge>
+        <PromptTagBadge key={tag.id || tag.name} tag={tag} />
       ))}
     </div>
   )

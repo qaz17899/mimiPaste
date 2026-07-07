@@ -128,9 +128,14 @@
   }
   body {
     @apply bg-background text-foreground;
+    cursor: default;
   }
   html {
     @apply font-sans;
+  }
+  input,
+  [contenteditable="true"] {
+    cursor: text;
   }
   *::-webkit-scrollbar {
     width: 0.75rem;

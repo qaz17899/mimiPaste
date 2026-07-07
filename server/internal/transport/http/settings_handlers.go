@@ -23,19 +23,22 @@ type updateSettingsInput struct {
 	BackupDir string `json:"backup_dir"`
 }
 
-func registerSettingsRoutes(mux *http.ServeMux, services *app.Services, logger logging.Logger) {
-	mux.HandleFunc("GET /api/settings", getSettings(services))
-	mux.HandleFunc("PUT /api/settings", updateSettings(services, logger))
+func registerSettingsRoutes(
+	routes *apiRouteRegistrar,
+	services *app.Services,
+	logger logging.Logger,
+) {
+	routes.Handle(http.MethodGet, "/api/settings", getSettings(services))
+	routes.Handle(http.MethodPut, "/api/settings", updateSettings(services, logger))
 }
 
-func getSettings(services *app.Services) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
-		appSettings, err := services.Store.GetAppSettings(request.Context())
+func getSettings(services *app.Services) apiHandler {
+	return func(ctx *apiContext) error {
+		appSettings, err := services.Store.GetAppSettings(ctx.request.Context())
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		writeJSON(writer, http.StatusOK, settingsResponse{
+		return ctx.writeJSON(http.StatusOK, settingsResponse{
 			DBPath: services.Settings.DBPath, BackupDir: appSettings.BackupDir,
 			MigrationsDir:  services.Settings.MigrationsDir,
 			ServiceVersion: "0.0.1", MigrationVersion: "202607060001",
@@ -43,24 +46,21 @@ func getSettings(services *app.Services) http.HandlerFunc {
 	}
 }
 
-func updateSettings(services *app.Services, logger logging.Logger) http.HandlerFunc {
-	return func(writer http.ResponseWriter, request *http.Request) {
+func updateSettings(services *app.Services, logger logging.Logger) apiHandler {
+	return func(ctx *apiContext) error {
 		var input updateSettingsInput
-		if err := decodeJSON(request, &input); err != nil {
-			writeError(writer, err)
-			return
+		if err := ctx.decodeJSON(&input); err != nil {
+			return err
 		}
 		backupDir, err := validateBackupDir(input.BackupDir)
 		if err != nil {
-			writeError(writer, err)
-			return
+			return err
 		}
-		if err := services.Store.UpdateBackupDir(request.Context(), backupDir, services.Clock.Now()); err != nil {
-			writeError(writer, err)
-			return
+		if err := services.Store.UpdateBackupDir(ctx.request.Context(), backupDir, services.Clock.Now()); err != nil {
+			return err
 		}
 		logger.Printf("settings updated")
-		getSettings(services)(writer, request)
+		return getSettings(services)(ctx)
 	}
 }
 
@@ -71,7 +71,7 @@ func validateBackupDir(path string) (string, error) {
 	}
 	info, err := os.Stat(clean)
 	if err != nil || !info.IsDir() {
-		return "", core.NewError(core.CodeFileReadError, "無法讀取設定檔，請確認路徑與權限。")
+		return "", core.NewErrorWithCause(core.CodeFileReadError, "無法讀取備份目錄，請確認路徑與權限。", err)
 	}
 	return clean, nil
 }

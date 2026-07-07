@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { Dispatch, SetStateAction } from "react"
-import { Plus, Save, Trash2 } from "lucide-react"
+import { Save } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -13,7 +13,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -22,38 +21,34 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@/components/ui/input-group"
 import { ThemeToggle } from "@/components/layout/ThemeToggle"
 
 import { usePromptMutations, useTags } from "@/features/prompts/prompt-queries"
 import type { PromptTag } from "@/features/prompts/prompt-types"
+import { TagSettingsPanel } from "@/features/settings/TagSettingsPanel"
+import {
+  DEFAULT_TAG_COLOR,
+  tagDraftFor,
+  type TagDraft,
+} from "@/features/settings/tag-settings-state"
 import {
   useSettings,
   useSettingsMutations,
 } from "@/features/settings/settings-queries"
+import { actionErrorMessage } from "@/lib/errors/display-policy"
 
 type SettingsWorkspaceModel = {
   backupDir: string
   dbPath: string
   deletingTag: PromptTag | null
-  drafts: Record<string, string>
+  drafts: Record<string, TagDraft>
   migrationVersion: string
   pendingBackup: boolean
   pendingDeleteTag: boolean
   serviceVersion: string
+  tagColor: string
   tagName: string
   tags: PromptTag[]
   migrationsDir: string
@@ -61,14 +56,15 @@ type SettingsWorkspaceModel = {
 
 type SettingsWorkspaceActions = {
   changeBackupDir: (value: string) => void
-  changeTagDraft: (id: string, value: string) => void
+  changeTagColor: (value: string) => void
+  changeTagDraft: (id: string, value: TagDraft) => void
   changeTagName: (value: string) => void
   confirmDeleteTag: () => void
-  createTag: () => void
+  createTag: () => Promise<boolean>
   deleteTag: (tag: PromptTag) => void
   saveBackupDir: () => void
   setDeletingTag: (tag: PromptTag | null) => void
-  updateTag: (tag: PromptTag) => void
+  updateTag: (tag: PromptTag) => Promise<boolean>
 }
 
 type SettingsWorkspaceController = {
@@ -81,13 +77,15 @@ type SettingsWorkspaceDeps = {
   deletingTag: PromptTag | null
   mutation: ReturnType<typeof useSettingsMutations>["update"]
   settings: ReturnType<typeof useSettings>["data"]
-  tagDrafts: Record<string, string>
+  tagColor: string
+  tagDrafts: Record<string, TagDraft>
   tagMutations: ReturnType<typeof usePromptMutations>
   tagName: string
   tags: PromptTag[]
   setBackupDraft: (value: string) => void
   setDeletingTag: (tag: PromptTag | null) => void
-  setTagDrafts: Dispatch<SetStateAction<Record<string, string>>>
+  setTagColor: (value: string) => void
+  setTagDrafts: Dispatch<SetStateAction<Record<string, TagDraft>>>
   setTagName: (value: string) => void
 }
 
@@ -110,9 +108,11 @@ function SettingsWorkspaceView({
       />
       <AppearanceCard />
       <TagSettingsPanel
+        color={model.tagColor}
         drafts={model.drafts}
         name={model.tagName}
         tags={model.tags}
+        onColorChange={actions.changeTagColor}
         onCreate={actions.createTag}
         onDelete={actions.deleteTag}
         onDraftChange={actions.changeTagDraft}
@@ -142,20 +142,23 @@ function useSettingsWorkspace(): SettingsWorkspaceController {
   const settings = settingsQuery.data
   const [backupDraft, setBackupDraft] = useState<string | null>(null)
   const [tagName, setTagName] = useState("")
+  const [tagColor, setTagColor] = useState(DEFAULT_TAG_COLOR)
   const [deletingTag, setDeletingTag] = useState<PromptTag | null>(null)
-  const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({})
+  const [tagDrafts, setTagDrafts] = useState<Record<string, TagDraft>>({})
   const backupDir = backupDraft ?? settings?.backup_dir ?? ""
   const deps = {
     backupDir,
     deletingTag,
     mutation,
     settings,
+    tagColor,
     tagDrafts,
     tagMutations,
     tagName,
     tags,
     setBackupDraft,
     setDeletingTag,
+    setTagColor,
     setTagDrafts,
     setTagName,
   }
@@ -171,10 +174,12 @@ function settingsActions({
   deletingTag,
   mutation,
   tagDrafts,
+  tagColor,
   tagMutations,
   tagName,
   setBackupDraft,
   setDeletingTag,
+  setTagColor,
   setTagDrafts,
   setTagName,
 }: SettingsWorkspaceDeps): SettingsWorkspaceActions {
@@ -182,6 +187,7 @@ function settingsActions({
     changeBackupDir: setBackupDraft,
     changeTagDraft: (id, value) =>
       setTagDrafts((drafts) => ({ ...drafts, [id]: value })),
+    changeTagColor: setTagColor,
     changeTagName: setTagName,
     confirmDeleteTag: () =>
       runAction(
@@ -193,7 +199,13 @@ function settingsActions({
       ),
     createTag: () =>
       runAction(
-        createTag(tagName, tagMutations.createTag.mutateAsync, setTagName)
+        createTag(
+          tagName,
+          tagColor,
+          tagMutations.createTag.mutateAsync,
+          setTagName,
+          setTagColor
+        )
       ),
     deleteTag: setDeletingTag,
     saveBackupDir: () =>
@@ -203,7 +215,7 @@ function settingsActions({
       runAction(
         updateTag(
           tag,
-          tagDrafts[tag.id] ?? tag.name,
+          tagDraftFor(tag, tagDrafts),
           tagMutations.updateTag.mutateAsync
         )
       ),
@@ -216,6 +228,7 @@ function settingsModel({
   mutation,
   settings,
   tagDrafts,
+  tagColor,
   tagMutations,
   tagName,
   tags,
@@ -230,6 +243,7 @@ function settingsModel({
     pendingBackup: mutation.isPending,
     pendingDeleteTag: tagMutations.deleteTag.isPending,
     serviceVersion: settings?.service_version ?? "",
+    tagColor,
     tagName,
     tags,
   }
@@ -289,171 +303,6 @@ function AppearanceCard() {
         <ThemeToggle />
       </CardContent>
     </Card>
-  )
-}
-
-function TagSettingsPanel({
-  drafts,
-  name,
-  tags,
-  onCreate,
-  onDelete,
-  onDraftChange,
-  onNameChange,
-  onUpdate,
-}: {
-  drafts: Record<string, string>
-  name: string
-  tags: PromptTag[]
-  onCreate: () => void
-  onDelete: (tag: PromptTag) => void
-  onDraftChange: (id: string, value: string) => void
-  onNameChange: (value: string) => void
-  onUpdate: (tag: PromptTag) => void
-}) {
-  return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle>標籤管理</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        <CreateTagField
-          name={name}
-          onChange={onNameChange}
-          onCreate={onCreate}
-        />
-        <TagList
-          drafts={drafts}
-          tags={tags}
-          onDelete={onDelete}
-          onDraftChange={onDraftChange}
-          onUpdate={onUpdate}
-        />
-      </CardContent>
-    </Card>
-  )
-}
-
-function CreateTagField({
-  name,
-  onChange,
-  onCreate,
-}: {
-  name: string
-  onChange: (value: string) => void
-  onCreate: () => void
-}) {
-  return (
-    <Field>
-      <FieldLabel htmlFor="new-tag-name" className="sr-only">
-        新增標籤
-      </FieldLabel>
-      <InputGroup>
-        <InputGroupInput
-          id="new-tag-name"
-          value={name}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="新增標籤"
-        />
-        <InputGroupAddon align="inline-end">
-          <InputGroupButton onClick={onCreate}>
-            <Plus data-icon="inline-start" />
-            新增
-          </InputGroupButton>
-        </InputGroupAddon>
-      </InputGroup>
-    </Field>
-  )
-}
-
-function TagList({
-  drafts,
-  tags,
-  onDelete,
-  onDraftChange,
-  onUpdate,
-}: {
-  drafts: Record<string, string>
-  tags: PromptTag[]
-  onDelete: (tag: PromptTag) => void
-  onDraftChange: (id: string, value: string) => void
-  onUpdate: (tag: PromptTag) => void
-}) {
-  if (tags.length === 0) {
-    return (
-      <Empty className="min-h-40">
-        <EmptyHeader>
-          <EmptyTitle>尚無標籤。</EmptyTitle>
-          <EmptyDescription>新增標籤後，可在提示詞中套用。</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    )
-  }
-
-  return (
-    <div data-slot="tag-settings-list" className="flex flex-col gap-2">
-      {tags.map((tag) => (
-        <TagRow
-          key={tag.id}
-          draftName={drafts[tag.id] ?? tag.name}
-          tag={tag}
-          onDelete={onDelete}
-          onDraftChange={onDraftChange}
-          onUpdate={onUpdate}
-        />
-      ))}
-    </div>
-  )
-}
-
-function TagRow({
-  draftName,
-  tag,
-  onDelete,
-  onDraftChange,
-  onUpdate,
-}: {
-  draftName: string
-  tag: PromptTag
-  onDelete: (tag: PromptTag) => void
-  onDraftChange: (id: string, value: string) => void
-  onUpdate: (tag: PromptTag) => void
-}) {
-  return (
-    <div
-      data-slot="tag-settings-row"
-      className="flex items-center gap-2 rounded-lg border p-2"
-    >
-      <Badge variant="secondary" className="shrink-0">
-        {draftName}
-      </Badge>
-      <Field className="min-w-0 flex-1">
-        <FieldLabel htmlFor={`tag-name-${tag.id}`} className="sr-only">
-          標籤名稱
-        </FieldLabel>
-        <Input
-          id={`tag-name-${tag.id}`}
-          value={draftName}
-          onChange={(event) => onDraftChange(tag.id, event.target.value)}
-        />
-      </Field>
-      <Button
-        variant="outline"
-        size="icon-sm"
-        aria-label="儲存標籤"
-        onClick={() => onUpdate(tag)}
-      >
-        <Save data-icon="inline-start" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="刪除標籤"
-        onClick={() => onDelete(tag)}
-      >
-        <Trash2 data-icon="inline-start" />
-      </Button>
-    </div>
   )
 }
 
@@ -528,7 +377,7 @@ function DiagnosticsCard({
       <CardContent className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
         <Info label="服務版本" value={serviceVersion} />
         <Info label="資料版本" value={migrationVersion} />
-        <Info label="遷移目錄" value={migrationsDir} />
+        <Info label="資料更新目錄" value={migrationsDir} />
       </CardContent>
     </Card>
   )
@@ -544,11 +393,14 @@ async function saveBackupDir(
 
 async function createTag(
   name: string,
+  color: string,
   create: (input: { name: string; color?: string | null }) => Promise<unknown>,
-  setName: (name: string) => void
+  setName: (name: string) => void,
+  setColor: (color: string) => void
 ) {
-  await create({ name })
+  await create({ name, color })
   setName("")
+  setColor(DEFAULT_TAG_COLOR)
   toast.success("標籤已新增。")
 }
 
@@ -565,18 +417,25 @@ async function deleteTag(
 
 async function updateTag(
   tag: PromptTag,
-  name: string,
+  draft: TagDraft,
   update: (input: {
     id: string
     input: { name: string; color?: string | null }
   }) => Promise<unknown>
 ) {
-  await update({ id: tag.id, input: { name, color: tag.color ?? null } })
+  await update({
+    id: tag.id,
+    input: { name: draft.name, color: draft.color },
+  })
   toast.success("標籤已更新。")
 }
 
-function runAction(action: Promise<unknown>) {
-  action.catch((error: unknown) => {
-    toast.error(error instanceof Error ? error.message : "操作失敗。")
-  })
+async function runAction(action: Promise<unknown>) {
+  try {
+    await action
+    return true
+  } catch (error: unknown) {
+    toast.error(actionErrorMessage(error))
+    return false
+  }
 }

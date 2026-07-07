@@ -9,7 +9,15 @@ paths:
     get:
       operationId: getHealth
       responses:
-        "200": { description: Local service is running. }
+        "200":
+          description: Local service is running.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/prompts:
     get:
       operationId: listPrompts
@@ -19,7 +27,15 @@ paths:
         - { name: favorite, in: query, schema: { type: boolean } }
         - { name: sort, in: query, schema: { type: string, enum: [updated, copied, copy_count, title] } }
       responses:
-        "200": { description: Prompt list. }
+        "200":
+          description: Prompt list.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PromptListResponse" }
+        default: { $ref: "#/components/responses/Problem" }
     post:
       operationId: createPrompt
       requestBody:
@@ -27,168 +43,578 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/PromptSaveInput" }
       responses:
-        "201": { description: Prompt created. }
+        "201":
+          description: Prompt created.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Prompt" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/prompts/{id}:
     get:
       operationId: getPrompt
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
       responses:
-        "200": { description: Prompt detail. }
+        "200":
+          description: Prompt detail.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Prompt" }
+        default: { $ref: "#/components/responses/Problem" }
     put:
       operationId: updatePrompt
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
       requestBody:
         content:
           application/json:
             schema: { $ref: "#/components/schemas/PromptSaveInput" }
       responses:
-        "200": { description: Prompt updated. }
+        "200":
+          description: Prompt updated.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Prompt" }
+        default: { $ref: "#/components/responses/Problem" }
     delete:
       operationId: deletePrompt
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
       responses:
-        "204": { description: Prompt deleted. }
+        "204":
+          description: Prompt deleted.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+        default: { $ref: "#/components/responses/Problem" }
   /api/prompts/{id}/copy:
     post:
       operationId: recordPromptCopy
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
       responses:
-        "200": { description: Copy usage recorded after clipboard success. }
+        "200":
+          description: Copy usage recorded after clipboard success.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Prompt" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/prompts/{id}/versions:
+    get:
+      operationId: listPromptVersions
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      responses:
+        "200":
+          description: Prompt version history.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PromptVersionListResponse" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/prompts/{id}/rollback:
+    post:
+      operationId: rollbackPrompt
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PromptRollbackInput" }
+      responses:
+        "200":
+          description: Prompt restored to a selected version.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Prompt" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/tags:
     get:
       operationId: listTags
       responses:
-        "200": { description: Tag list. }
+        "200":
+          description: Tag list.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TagListResponse" }
+        default: { $ref: "#/components/responses/Problem" }
     post:
       operationId: createTag
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TagInput" }
       responses:
-        "201": { description: Tag created. }
+        "201":
+          description: Tag created.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tag" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/tags/{id}:
     put:
       operationId: updateTag
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TagInput" }
       responses:
-        "200": { description: Tag updated. }
+        "200":
+          description: Tag updated.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tag" }
+        default: { $ref: "#/components/responses/Problem" }
     delete:
       operationId: deleteTag
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
       responses:
-        "204": { description: Tag deleted. }
+        "204":
+          description: Tag deleted.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+        default: { $ref: "#/components/responses/Problem" }
   /api/export/prompts:
     get:
       operationId: exportPrompts
       responses:
-        "200": { description: Prompt JSON export. }
+        "200":
+          description: Prompt JSON export.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PromptExportEnvelope" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/import/prompts:
     post:
       operationId: importPrompts
+      deprecated: true
+      description: Direct import is rejected. Use preview then confirm.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PromptImportEnvelope" }
       responses:
-        "200": { description: Prompt import completed transactionally. }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/import/prompts/preview:
+    post:
+      operationId: previewImportPrompts
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PromptImportEnvelope" }
+      responses:
+        "200":
+          description: Prompt import preview without writes.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PromptImportPreview" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/import/prompts/confirm:
+    post:
+      operationId: confirmImportPrompts
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PromptImportEnvelope" }
+      responses:
+        "200":
+          description: Prompt import completed transactionally after preview.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportPromptsResponse" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/agents:
     get:
       operationId: listAgents
       responses:
-        "200": { description: Agent list. }
+        "200":
+          description: Agent list.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentListResponse" }
+        default: { $ref: "#/components/responses/Problem" }
     post:
       operationId: createAgent
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAgentInput" }
       responses:
-        "201": { description: Custom agent created. }
+        "201":
+          description: Custom agent created.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/config-sources:
     get:
       operationId: listConfigSources
       responses:
-        "200": { description: Config source list. }
+        "200":
+          description: Config source list.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigSourceListResponse" }
+        default: { $ref: "#/components/responses/Problem" }
     post:
       operationId: createConfigSource
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateConfigSourceInput" }
       responses:
-        "201": { description: Config source registered. }
+        "201":
+          description: Config source registered.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigSource" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/config-sources/{id}/read:
     get:
       operationId: readConfigSource
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
       responses:
-        "200": { description: Registered config file content and safe fields. }
+        "200":
+          description: Registered config file content and safe fields.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigReadResult" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/config-sources/{id}/validate:
     post:
       operationId: validateConfigSource
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ValidateInput" }
       responses:
-        "200": { description: Validation result. }
+        "200":
+          description: Validation result.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationResult" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/config-sources/{id}/content:
     put:
       operationId: saveConfigSourceContent
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SaveContentInput" }
       responses:
-        "200": { description: Raw config content saved after validation. }
+        "200":
+          description: Raw config content saved after validation.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigReadResult" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/config-sources/{id}/preview:
     post:
       operationId: previewConfigApply
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PreviewInput" }
       responses:
-        "200": { description: Diff preview. }
+        "200":
+          description: Diff preview.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiffResult" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/config-sources/{id}/apply:
     post:
       operationId: applyProfile
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApplyInput" }
       responses:
-        "200": { description: Profile applied with backup. }
+        "200":
+          description: Profile applied with backup.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigOperationResult" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/profiles:
     get:
       operationId: listProfiles
       responses:
-        "200": { description: Profile list. }
+        "200":
+          description: Profile list.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProfileListResponse" }
+        default: { $ref: "#/components/responses/Problem" }
     post:
       operationId: createProfile
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProfileSaveInput" }
       responses:
-        "201": { description: Profile created. }
+        "201":
+          description: Profile created.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Profile" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/profiles/{id}:
     get:
       operationId: getProfile
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
       responses:
-        "200": { description: Profile detail. }
+        "200":
+          description: Profile detail.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Profile" }
+        default: { $ref: "#/components/responses/Problem" }
     put:
       operationId: updateProfile
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProfileSaveInput" }
       responses:
-        "200": { description: Profile updated. }
+        "200":
+          description: Profile updated.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Profile" }
+        default: { $ref: "#/components/responses/Problem" }
     delete:
       operationId: deleteProfile
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
       responses:
-        "204": { description: Profile deleted. }
+        "204":
+          description: Profile deleted.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+        default: { $ref: "#/components/responses/Problem" }
   /api/backups:
     get:
       operationId: listBackups
       responses:
-        "200": { description: Backup list. }
+        "200":
+          description: Backup list.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BackupListResponse" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/backups/prune:
+    post:
+      operationId: pruneBackups
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BackupPruneInput" }
+      responses:
+        "200":
+          description: Old unpinned backups pruned.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BackupPruneResult" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/backups/{id}:
     get:
       operationId: getBackup
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
       responses:
-        "200": { description: Backup detail. }
+        "200":
+          description: Backup detail.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Backup" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteBackup
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      responses:
+        "204":
+          description: Backup metadata and content file deleted.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+        default: { $ref: "#/components/responses/Problem" }
+  /api/backups/{id}/export:
+    get:
+      operationId: exportBackup
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      responses:
+        "200":
+          description: Backup content export.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BackupExport" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/backups/{id}/pin:
+    put:
+      operationId: pinBackup
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BackupPinInput" }
+      responses:
+        "200":
+          description: Backup pin state updated.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Backup" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/backups/{id}/preview-restore:
     post:
       operationId: previewRestore
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
       responses:
-        "200": { description: Restore diff preview. }
+        "200":
+          description: Restore diff preview.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiffResult" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/backups/{id}/restore:
     post:
       operationId: restoreBackup
-      parameters: [ { $ref: "#/components/parameters/ID" } ]
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RestoreInput" }
       responses:
-        "200": { description: Backup restored after confirmation. }
+        "200":
+          description: Backup restored after confirmation.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigOperationResult" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/settings:
     get:
       operationId: getSettings
       responses:
-        "200": { description: Local app settings. }
+        "200":
+          description: Local app settings.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+        default: { $ref: "#/components/responses/Problem" }
     put:
       operationId: updateSettings
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSettingsInput" }
       responses:
-        "200": { description: Settings updated. }
+        "200":
+          description: Settings updated.
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/RequestId"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+        default: { $ref: "#/components/responses/Problem" }
 components:
   parameters:
     ID:
@@ -196,7 +622,26 @@ components:
       in: path
       required: true
       schema: { type: string }
+  headers:
+    RequestId:
+      schema: { type: string }
+      description: Request reference for correlating responses with server logs.
+  responses:
+    Problem:
+      description: RFC 9457 Problem Details error response.
+      headers:
+        X-Request-Id:
+          $ref: "#/components/headers/RequestId"
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
   schemas:
+    Health:
+      type: object
+      required: [status, service]
+      properties:
+        status: { type: string }
+        service: { type: string }
     PromptSaveInput:
       type: object
       required: [title, content]
@@ -208,14 +653,369 @@ components:
           type: array
           items: { type: string }
         favorite: { type: boolean }
-    ErrorEnvelope:
+    Tag:
       type: object
-      required: [error]
+      required: [id, name]
       properties:
-        error:
+        id: { type: string }
+        name: { type: string }
+        color: { type: string }
+    TagInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        color: { type: string }
+    TagListResponse:
+      type: object
+      required: [tags]
+      properties:
+        tags:
+          type: array
+          items: { $ref: "#/components/schemas/Tag" }
+    Prompt:
+      type: object
+      required: [id, title, content, description, tags, favorite, created_at, updated_at, copy_count]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        content: { type: string }
+        description: { type: string }
+        tags:
+          type: array
+          items: { $ref: "#/components/schemas/Tag" }
+        favorite: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        last_copied_at: { type: string, format: date-time }
+        copy_count: { type: integer }
+    PromptListResponse:
+      type: object
+      required: [prompts]
+      properties:
+        prompts:
+          type: array
+          items: { $ref: "#/components/schemas/Prompt" }
+    PromptVersion:
+      type: object
+      required: [id, prompt_id, version, title, content, description, tags, favorite, created_at]
+      properties:
+        id: { type: string }
+        prompt_id: { type: string }
+        version: { type: integer }
+        title: { type: string }
+        content: { type: string }
+        description: { type: string }
+        tags:
+          type: array
+          items: { $ref: "#/components/schemas/Tag" }
+        favorite: { type: boolean }
+        created_at: { type: string, format: date-time }
+    PromptVersionListResponse:
+      type: object
+      required: [versions]
+      properties:
+        versions:
+          type: array
+          items: { $ref: "#/components/schemas/PromptVersion" }
+    PromptRollbackInput:
+      type: object
+      required: [version_id]
+      properties:
+        version_id: { type: string }
+    ImportPrompt:
+      type: object
+      required: [title, content]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        content: { type: string }
+        description: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        favorite: { type: boolean }
+    PromptImportEnvelope:
+      type: object
+      required: [prompts]
+      properties:
+        prompts:
+          type: array
+          items: { $ref: "#/components/schemas/ImportPrompt" }
+    PromptExportEnvelope:
+      type: object
+      required: [prompts]
+      properties:
+        prompts:
+          type: array
+          items: { $ref: "#/components/schemas/Prompt" }
+    PromptImportPreviewItem:
+      type: object
+      required: [index, action]
+      properties:
+        index: { type: integer }
+        id: { type: string }
+        title: { type: string }
+        action: { type: string, enum: [added, updated, skipped, invalid] }
+        code: { type: string }
+        error: { type: string }
+    PromptImportPreview:
+      type: object
+      required: [added, updated, skipped, invalid, items]
+      properties:
+        added: { type: integer }
+        updated: { type: integer }
+        skipped: { type: integer }
+        invalid: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PromptImportPreviewItem" }
+    ImportPromptsResponse:
+      type: object
+      required: [status, preview]
+      properties:
+        status: { type: string, enum: [ok] }
+        preview: { $ref: "#/components/schemas/PromptImportPreview" }
+    Agent:
+      type: object
+      required: [id, name, kind, config_source_count, profile_count, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { type: string }
+        config_source_count: { type: integer }
+        profile_count: { type: integer }
+        created_at: { type: string, format: date-time }
+    AgentListResponse:
+      type: object
+      required: [agents]
+      properties:
+        agents:
+          type: array
+          items: { $ref: "#/components/schemas/Agent" }
+    CreateAgentInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    ConfigSource:
+      type: object
+      required: [id, agent_id, agent_name, name, path, format, created_at, updated_at]
+      properties:
+        id: { type: string }
+        agent_id: { type: string }
+        agent_name: { type: string }
+        name: { type: string }
+        path: { type: string }
+        format: { type: string, enum: [toml, json, text] }
+        active_profile_id: { type: string }
+        active_profile_name: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ConfigSourceListResponse:
+      type: object
+      required: [config_sources]
+      properties:
+        config_sources:
+          type: array
+          items: { $ref: "#/components/schemas/ConfigSource" }
+    CreateConfigSourceInput:
+      type: object
+      required: [agent_id, name, path, format]
+      properties:
+        agent_id: { type: string }
+        name: { type: string }
+        path: { type: string }
+        format: { type: string, enum: [toml, json, text] }
+    ConfigField:
+      type: object
+      required: [key, value, sensitive]
+      properties:
+        key: { type: string }
+        value: { type: string }
+        sensitive: { type: boolean }
+    ConfigReadResult:
+      type: object
+      required: [source, content, display_content, content_masked, valid, fields]
+      properties:
+        source: { $ref: "#/components/schemas/ConfigSource" }
+        content: { type: string, description: Raw content returned for explicit reveal only. }
+        display_content: { type: string, description: Default masked display content. }
+        content_masked: { type: boolean }
+        valid: { type: boolean }
+        error: { type: string }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/ConfigField" }
+    ValidateInput:
+      type: object
+      properties:
+        content: { type: string }
+    SaveContentInput:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string }
+        content_masked: { type: boolean }
+    ValidationResult:
+      type: object
+      required: [valid, format]
+      properties:
+        valid: { type: boolean }
+        error: { type: string }
+        format: { type: string, enum: [toml, json, text] }
+    PreviewInput:
+      type: object
+      properties:
+        profile_id: { type: string }
+        content: { type: string }
+    ApplyInput:
+      type: object
+      required: [profile_id]
+      properties:
+        profile_id: { type: string }
+    RestoreInput:
+      type: object
+      required: [confirm]
+      properties:
+        confirm: { type: boolean }
+    DiffResult:
+      type: object
+      required: [diff, changed]
+      properties:
+        diff: { type: string }
+        changed: { type: boolean }
+    ConfigOperation:
+      type: object
+      required: [id, kind, status, config_source_id, created_at, updated_at]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [apply, restore] }
+        status: { type: string, enum: [running, completed, failed] }
+        config_source_id: { type: string }
+        profile_id: { type: string }
+        backup_id: { type: string }
+        error_code: { type: string }
+        error_detail: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ConfigOperationResult:
+      type: object
+      required: [operation, config]
+      properties:
+        operation: { $ref: "#/components/schemas/ConfigOperation" }
+        config: { $ref: "#/components/schemas/ConfigReadResult" }
+    Profile:
+      type: object
+      required: [id, agent_id, agent_name, name, description, format, content, display_content, content_masked, created_at, updated_at]
+      properties:
+        id: { type: string }
+        agent_id: { type: string }
+        agent_name: { type: string }
+        name: { type: string }
+        description: { type: string }
+        format: { type: string, enum: [toml, json, text] }
+        content: { type: string, description: Raw content returned for explicit reveal only. }
+        display_content: { type: string, description: Default masked display content. }
+        content_masked: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ProfileSaveInput:
+      type: object
+      required: [agent_id, name, format, content]
+      properties:
+        agent_id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        format: { type: string, enum: [toml, json, text] }
+        content: { type: string }
+        content_masked: { type: boolean }
+    ProfileListResponse:
+      type: object
+      required: [profiles]
+      properties:
+        profiles:
+          type: array
+          items: { $ref: "#/components/schemas/Profile" }
+    Backup:
+      type: object
+      required: [id, config_source_id, config_source_name, agent_name, path, format, content_path, content, display_content, content_masked, pinned, created_at]
+      properties:
+        id: { type: string }
+        config_source_id: { type: string }
+        config_source_name: { type: string }
+        agent_name: { type: string }
+        profile_id: { type: string }
+        profile_name: { type: string }
+        path: { type: string }
+        format: { type: string, enum: [toml, json, text] }
+        content_path: { type: string }
+        content: { type: string, description: Raw content returned for explicit reveal only. }
+        display_content: { type: string, description: Default masked display content. }
+        content_masked: { type: boolean }
+        pinned: { type: boolean }
+        created_at: { type: string, format: date-time }
+    BackupListResponse:
+      type: object
+      required: [backups]
+      properties:
+        backups:
+          type: array
+          items: { $ref: "#/components/schemas/Backup" }
+    BackupExport:
+      type: object
+      required: [filename, content]
+      properties:
+        filename: { type: string }
+        content: { type: string }
+    BackupPruneInput:
+      type: object
+      required: [keep]
+      properties:
+        keep: { type: integer, minimum: 0 }
+    BackupPruneResult:
+      type: object
+      required: [deleted, kept]
+      properties:
+        deleted:
+          type: array
+          items: { $ref: "#/components/schemas/Backup" }
+        kept: { type: integer }
+    BackupPinInput:
+      type: object
+      required: [pinned]
+      properties:
+        pinned: { type: boolean }
+    Settings:
+      type: object
+      required: [db_path, backup_dir, migrations_dir, service_version, migration_version]
+      properties:
+        db_path: { type: string }
+        backup_dir: { type: string }
+        migrations_dir: { type: string }
+        service_version: { type: string }
+        migration_version: { type: string }
+    UpdateSettingsInput:
+      type: object
+      required: [backup_dir]
+      properties:
+        backup_dir: { type: string }
+    ProblemDetails:
+      type: object
+      required: [type, title, status, detail, instance, code, requestId, retryable, details]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance:
+          type: string
+          format: uri-reference
+        code: { type: string }
+        requestId: { type: string }
+        retryable: { type: boolean }
+        details:
           type: object
-          required: [code, message, details]
-          properties:
-            code: { type: string }
-            message: { type: string }
-            details: { type: object }
+          additionalProperties: true
